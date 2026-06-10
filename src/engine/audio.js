@@ -123,6 +123,11 @@ export class AudioEngine {
     this.engine.frequency.setTargetAtTime(38 + throttle * 30, t, 0.15)
   }
 
+  setVolume(v) {
+    if (this.ctx) this.master.gain.setTargetAtTime(v, this.ctx.currentTime, 0.1)
+    this.volume = v
+  }
+
   // A distant creature rumble: low sine boom + pitch sag. The dread channel.
   playRumble(intensity = 1) {
     if (!this.ctx) return

@@ -39,6 +39,7 @@ import { PickupField } from './game/pickups.js'
 import { siteDefs, buildSiteGroup } from './game/sites.js'
 import { GameHud } from './ui/gameHud.js'
 import { Pda } from './ui/pda.js'
+import { loadSettings, saveSettings } from './engine/settings.js'
 import { Predator, Hunter } from './game/creatures.js'
 import { noiseLevel } from './game/threat.js'
 import { Sonar, SONAR_TUNING } from './fx/sonar.js'
@@ -74,21 +75,29 @@ async function main() {
     Math.max(1, (navigator.hardwareConcurrency || 4) - 1),
     () => new Worker(new URL('./world/chunkWorker.js', import.meta.url), { type: 'module' }),
   )
+  const settings = loadSettings()
   const chunkManager = new ChunkManager(scene, pool, SEED, createTerrainMaterial(uTime))
   const density = createDensityField(SEED)
   const ops = anchorsForSeed(SEED, density)
-  const controller = new DiveController(camera, canvas, density, SPAWN)
+  const controller = new DiveController(camera, canvas, density, SPAWN, settings)
   const hud = new DebugHud(document.getElementById('hud'))
   const hint = document.getElementById('hint')
 
   // Atmosphere (M2)
-  const lowQuality = params.get('q') === 'low'
+  const lowQuality = params.get('q') === 'low' || settings.quality === 'low'
   const snow = new MarineSnow(lowQuality ? 8000 : 50000)
   scene.add(snow.sprite)
   const surface = createSurface()
   scene.add(surface.group)
   const audio = new AudioEngine()
-  canvas.addEventListener('click', () => audio.start(), { once: true })
+  canvas.addEventListener(
+    'click',
+    () => {
+      audio.start()
+      audio.setVolume(settings.volume)
+    },
+    { once: true },
+  )
 
   // Life (M3)
   const stimulus = new StimulusSystem()
@@ -120,12 +129,17 @@ async function main() {
   const subMesh = createSubMesh()
   subMesh.visible = subState.built
   scene.add(subMesh)
-  const subController = new SubController(camera, canvas, density, subState)
+  const subController = new SubController(camera, canvas, density, subState, settings)
   let aboard = false
   let modeCooldown = 0
 
   const gameHud = new GameHud(document.getElementById('gamehud'))
   const pda = new Pda(document.getElementById('pda'), {
+    settings,
+    onSettingsChange: (s) => {
+      saveSettings(s)
+      audio.setVolume(s.volume)
+    },
     onCraft: (id) => {
       if ((id === 'hull2' || id === 'hull3') && !subState.built) {
         gameHud.toast('hull plating needs a sub to bolt onto')
@@ -156,6 +170,7 @@ async function main() {
     },
   })
 
+  pda.backendName = backendName
   const buoy = createBuoy()
   scene.add(buoy.group)
   const pickups = new PickupField(SEED, density, ops)

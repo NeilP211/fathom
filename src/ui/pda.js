@@ -3,9 +3,11 @@ import { RECIPES, LOGS, SIGNALS, canCraft } from '../game/state.js'
 // The PDA: Tab-toggled panel with Inventory / Craft / Journal tabs
 // (spec section 5: list-based, no drag-and-drop, click recipe to craft).
 export class Pda {
-  constructor(root, { onCraft }) {
+  constructor(root, { onCraft, settings, onSettingsChange }) {
     this.root = root
     this.onCraft = onCraft
+    this.settings = settings
+    this.onSettingsChange = onSettingsChange
     this.tab = 'inventory'
     this.open = false
     root.innerHTML = `
@@ -30,6 +32,13 @@ export class Pda {
         this.render()
       }
     })
+    this.bodyEl.addEventListener('input', (e) => {
+      if (!this.settings) return
+      if (e.target.id === 'set-volume') this.settings.volume = parseFloat(e.target.value)
+      if (e.target.id === 'set-inverty') this.settings.invertY = e.target.checked
+      if (e.target.id === 'set-quality') this.settings.quality = e.target.value
+      this.onSettingsChange?.(this.settings)
+    })
   }
 
   setOpen(open, state) {
@@ -41,7 +50,7 @@ export class Pda {
 
   render() {
     const s = this.state
-    const tabs = ['inventory', 'craft', 'journal']
+    const tabs = ['inventory', 'craft', 'journal', 'system']
     this.tabsEl.innerHTML = tabs
       .map((t) => `<span data-tab="${t}" class="${t === this.tab ? 'on' : ''}">${t.toUpperCase()}</span>`)
       .join('')
@@ -70,6 +79,17 @@ export class Pda {
         return `<div class="row"><span>${r.name}<small>${r.desc} (${cost})</small></span>` +
           `<button data-craft="${r.id}" ${ok ? '' : 'disabled'}>CRAFT</button></div>`
       }).join('')
+    } else if (this.tab === 'system') {
+      const set = this.settings || { volume: 0.9, invertY: false, quality: 'high' }
+      this.bodyEl.innerHTML =
+        `<div class="row"><span>volume</span>` +
+        `<input id="set-volume" type="range" min="0" max="1" step="0.05" value="${set.volume}"></div>` +
+        `<div class="row"><span>invert mouse Y</span>` +
+        `<input id="set-inverty" type="checkbox" ${set.invertY ? 'checked' : ''}></div>` +
+        `<div class="row"><span>quality (applies on reload)</span>` +
+        `<select id="set-quality"><option value="high" ${set.quality === 'high' ? 'selected' : ''}>high</option>` +
+        `<option value="low" ${set.quality === 'low' ? 'selected' : ''}>low</option></select></div>` +
+        `<div class="empty">renderer: ${this.backendName || 'unknown'}</div>`
     } else {
       const sigRows = s.firedSignals
         .map((id) => {

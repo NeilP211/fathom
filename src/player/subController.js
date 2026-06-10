@@ -7,11 +7,12 @@ const PITCH_LIMIT = 0.6 // the hull does not somersault
 // Pilots like a heavier, faster diver (spec section 5 controls): same key
 // scheme, mouse steers the hull, camera locked to the cockpit.
 export class SubController {
-  constructor(camera, canvas, density, subState) {
+  constructor(camera, canvas, density, subState, settings = null) {
     this.camera = camera
     this.canvas = canvas
     this.density = density
     this.sub = subState
+    this.settings = settings
     this.active = false
     this.throttle = 0
     this.state = {
@@ -24,8 +25,9 @@ export class SubController {
 
     document.addEventListener('mousemove', (e) => {
       if (!this.active || document.pointerLockElement !== canvas) return
+      const ySign = this.settings?.invertY ? -1 : 1
       this.state.yaw -= e.movementX * MOUSE_SENSITIVITY
-      this.state.pitch -= e.movementY * MOUSE_SENSITIVITY
+      this.state.pitch -= e.movementY * MOUSE_SENSITIVITY * ySign
       this.state.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.state.pitch))
     })
     document.addEventListener('keydown', (e) => this.keys.add(e.code))
