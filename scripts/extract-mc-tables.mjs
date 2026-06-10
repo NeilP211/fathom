@@ -2,7 +2,7 @@ import { readFileSync, writeFileSync } from 'node:fs'
 
 const src = readFileSync('/tmp/mc-r184.js', 'utf8').replace(/\/\/[^\n]*/g, '')
 const arrays = [...src.matchAll(/new Int32Array\(\s*\[([\s\S]*?)\]\s*\)/g)]
-  .map((m) => m[1].split(',').map((s) => parseInt(s.trim())))
+  .map((m) => m[1].split(',').map((s) => parseInt(s.replace(/\s+/g, '')))) // three.js writes '- 1' with a space
 const edgeTable = arrays.find((a) => a.length === 256)
 const triTable = arrays.find((a) => a.length === 4096)
 if (!edgeTable || !triTable) {
