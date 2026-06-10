@@ -58,6 +58,20 @@ export const RECIPES = [
     desc: 'A one-person sub. Hull rated to 300m. Assemble at the salvage cradle.',
   },
   {
+    id: 'hull2',
+    name: 'Hull Plating MK2',
+    cost: { scrap: 10, biolume: 3 },
+    fragmentsNeeded: 3,
+    desc: 'Reinforces the sub to 600m. Fit at any fabricator.',
+  },
+  {
+    id: 'hull3',
+    name: 'Hull Plating MK3',
+    cost: { scrap: 14, biolume: 5 },
+    fragmentsNeeded: 3,
+    desc: 'Abyssal plating, rated 900m. The bottom stops being a wall.',
+  },
+  {
     id: 'flares',
     name: 'Flares (x2)',
     cost: { scrap: 1 },
@@ -70,9 +84,9 @@ export const RECIPES = [
   },
 ]
 
-// Signals: the entire quest system (spec section 5). M4 ships the first two;
-// the chain continues in M7. Trigger rule: a signal fires when its
-// predecessor's log has been recovered (signal 1 fires after the first craft).
+// Signals: the entire quest system (spec section 5). Trigger rule: a signal
+// fires when its predecessor's log has been recovered (signal 1 fires after
+// the first craft). Tone degrades with depth: optimism, unease, dread, silence.
 export const SIGNALS = [
   {
     id: 'sig1',
@@ -85,6 +99,24 @@ export const SIGNALS = [
     name: 'MERIDIAN SURVEY POST A - last transmission',
     after: 'log-sig1',
     log: 'log-sig2',
+  },
+  {
+    id: 'sig3',
+    name: 'MERIDIAN DRILL PLATFORM - repeating fault code',
+    after: 'log-sig2',
+    log: 'log-sig3',
+  },
+  {
+    id: 'sig4',
+    name: 'MERIDIAN DEEP RELAY - carrier tone only',
+    after: 'log-sig3',
+    log: 'log-sig4',
+  },
+  {
+    id: 'sig5',
+    name: 'UNREGISTERED BEACON - hand-keyed',
+    after: 'log-sig4',
+    log: 'log-sig5',
   },
 ]
 
@@ -105,6 +137,31 @@ export const LOGS = {
       'is no floor. Symons says instruments lie at depth. Instruments do ' +
       'not flinch, though. People flinch. - A. Reyes, postmaster',
   },
+  'log-sig3': {
+    title: 'Drill platform shift report',
+    body:
+      'The bore passed 700 meters and the cutters stopped meeting rock. Not ' +
+      'mud. Not void. Something with give. Lab says organic trace in every ' +
+      'core after that depth. Okafor wants us to cap it. Symons doubled the ' +
+      'shift instead. The sounder shows two floors now. One of them moves. ' +
+      '- D. Brandt, foreman',
+  },
+  'log-sig4': {
+    title: 'Deep relay terminal dump',
+    body:
+      'capped the bore. it does not matter. the cap is a door and we already ' +
+      'knocked. brandt would not come down from the platform. reyes stopped ' +
+      'answering. it follows the lights. it followed OURS. do not run your ' +
+      'lights. do not run your engine. do not ping. - s',
+  },
+  'log-sig5': {
+    title: 'Hand-keyed beacon, final entry',
+    body:
+      'No names left to sign. The core is sealed beside this beacon. ' +
+      'Everything Meridian measured, everything we woke. Take it up. Do not ' +
+      'study it here. It learned the sound of our machines. It will learn ' +
+      'yours faster. Go dark, go quiet, go up.',
+  },
 }
 
 export function createState() {
@@ -122,7 +179,7 @@ export function createState() {
     logs: [], // recovered log ids
     firedSignals: [], // signal ids announced to the player
     consumed: [], // consumed world node ids (worldDiffs bucket)
-    flags: { firstCraft: false },
+    flags: { firstCraft: false, coreRecovered: false, finished: false },
   }
 }
 

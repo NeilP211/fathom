@@ -23,13 +23,31 @@ describe('density field', () => {
     expect(differing).toBeGreaterThan(40)
   })
 
-  it('is water at the surface and rock far below the floor', () => {
+  it('is water at the surface and rock far below the shelf floor', () => {
     for (const seed of [1, 42, 999]) {
       const d = createDensityField(seed)
-      for (const [x, z] of [[0, 0], [100, -50], [-300, 220]]) {
+      for (const [x, z] of [[0, 0], [100, -50], [-150, 120]]) {
         expect(d(x, 0, z)).toBeLessThan(0) // surface is always water
-        expect(d(x, -120, z)).toBeGreaterThan(0) // 120m down is always inside rock
+        expect(d(x, -120, z)).toBeGreaterThan(0) // shelf: 120m down is inside rock
       }
     }
+  })
+
+  it('descends from the shelf to an abyssal plain (M7)', () => {
+    const d = createDensityField(777)
+    expect(d.descentAt(100)).toBe(0) // the Shelf holds
+    expect(d.descentAt(250)).toBe(0)
+    let prev = 0
+    for (let r = 250; r <= 1600; r += 50) {
+      const v = d.descentAt(r)
+      expect(v).toBeGreaterThanOrEqual(prev)
+      prev = v
+    }
+    expect(d.descentAt(1500)).toBe(780)
+    // the floor at 1400m out is in Floor-band depth
+    expect(d.floorY(1400, 0)).toBeLessThan(-600)
+    // and still water above it, rock below it
+    expect(d(1400, -200, 0)).toBeLessThan(0)
+    expect(d(1400, -900, 0)).toBeGreaterThan(0)
   })
 })

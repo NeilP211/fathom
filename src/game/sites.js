@@ -1,69 +1,87 @@
 import * as THREE from 'three/webgpu'
 import alea from 'alea'
+import { sitePositionsForSeed } from '../world/anchors.js'
 
-// Stub signal sites (spec section 10 milestone 4): seeded coordinates plus a
-// loot crate, fragments, and a log tablet. Upgraded to full wreck dioramas in
-// milestone 7; ids and placement stay stable so saves carry forward.
-export function siteDefs(seed, density) {
-  const rng = alea(`${seed}:sites`)
-  const defs = []
-  const specs = [
-    {
-      id: 'sig1',
-      dist: 230,
-      loot: [
-        { kind: 'fragment', recipeId: 'o2tank2' },
-        { kind: 'fragment', recipeId: 'o2tank2' },
-        { kind: 'fragment', recipeId: 'fins' },
-        { kind: 'fragment', recipeId: 'fins' },
-        { kind: 'pickup', item: 'scrap' },
-        { kind: 'pickup', item: 'scrap' },
-        { kind: 'pickup', item: 'scrap' },
-        { kind: 'log', logId: 'log-sig1' },
-      ],
-    },
-    {
-      id: 'sig2',
-      dist: 470,
-      loot: [
-        { kind: 'fragment', recipeId: 'suit2' },
-        { kind: 'fragment', recipeId: 'suit2' },
-        { kind: 'fragment', recipeId: 'suit2' },
-        { kind: 'fragment', recipeId: 'sub' },
-        { kind: 'fragment', recipeId: 'sub' },
-        { kind: 'fragment', recipeId: 'sub' },
-        { kind: 'pickup', item: 'scrap' },
-        { kind: 'pickup', item: 'scrap' },
-        { kind: 'pickup', item: 'scrap' },
-        { kind: 'pickup', item: 'scrap' },
-        { kind: 'pickup', item: 'biolume' },
-        { kind: 'pickup', item: 'biolume' },
-        { kind: 'log', logId: 'log-sig2' },
-        { kind: 'cradle' },
-      ],
-    },
-  ]
-  for (const spec of specs) {
-    const angle = rng() * Math.PI * 2
-    const x = Math.cos(angle) * spec.dist
-    const z = Math.sin(angle) * spec.dist
-    const y = density.floorY(x, z)
-    const entities = []
-    const er = alea(`${seed}:site:${spec.id}`)
-    spec.loot.forEach((l, i) => {
-      const ex = x + (er() - 0.5) * 10
-      const ez = z + (er() - 0.5) * 10
-      const ey = density.floorY(ex, ez) + 0.5
-      entities.push({ ...l, id: `site:${spec.id}:${i}`, x: ex, y: ey, z: ez })
-    })
-    defs.push({ id: spec.id, x, y, z, entities })
-  }
-  return defs
+// The five Meridian wreck sites (spec section 6): positions come from the
+// story corridor (anchors.js); loot escalates the gear ladder; each carries
+// one log of the breadcrumb chain. Ids stay stable so saves carry forward.
+const SITE_LOOT = {
+  sig1: [
+    { kind: 'fragment', recipeId: 'o2tank2' },
+    { kind: 'fragment', recipeId: 'o2tank2' },
+    { kind: 'fragment', recipeId: 'fins' },
+    { kind: 'fragment', recipeId: 'fins' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'log', logId: 'log-sig1' },
+  ],
+  sig2: [
+    { kind: 'fragment', recipeId: 'suit2' },
+    { kind: 'fragment', recipeId: 'suit2' },
+    { kind: 'fragment', recipeId: 'suit2' },
+    { kind: 'fragment', recipeId: 'sub' },
+    { kind: 'fragment', recipeId: 'sub' },
+    { kind: 'fragment', recipeId: 'sub' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'biolume' },
+    { kind: 'pickup', item: 'biolume' },
+    { kind: 'log', logId: 'log-sig2' },
+    { kind: 'cradle' },
+  ],
+  sig3: [
+    { kind: 'fragment', recipeId: 'hull2' },
+    { kind: 'fragment', recipeId: 'hull2' },
+    { kind: 'fragment', recipeId: 'hull2' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'biolume' },
+    { kind: 'log', logId: 'log-sig3' },
+  ],
+  sig4: [
+    { kind: 'fragment', recipeId: 'hull3' },
+    { kind: 'fragment', recipeId: 'hull3' },
+    { kind: 'fragment', recipeId: 'hull3' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'pickup', item: 'scrap' },
+    { kind: 'log', logId: 'log-sig4' },
+  ],
+  sig5: [
+    { kind: 'core' },
+    { kind: 'log', logId: 'log-sig5' },
+  ],
 }
 
-// Visuals: crate + glowing fragment panels + log tablet. One group per site.
-export function buildSiteGroup(site) {
+export function siteDefs(seed, density) {
+  return sitePositionsForSeed(seed, density).map((p) => {
+    const entities = []
+    const er = alea(`${seed}:site:${p.id}`)
+    SITE_LOOT[p.id].forEach((l, i) => {
+      const ex = p.x + (er() - 0.5) * 10
+      const ez = p.z + (er() - 0.5) * 10
+      const ey = density.floorY(ex, ez) + 0.5
+      entities.push({ ...l, id: `site:${p.id}:${i}`, x: ex, y: ey, z: ez })
+    })
+    return { id: p.id, x: p.x, y: p.y, z: p.z, dist: p.dist, entities }
+  })
+}
+
+// Visuals: wreck diorama per site (broken hull, containers, antenna mast)
+// plus glowing fragment panels and log tablets. One group per site.
+export function buildSiteGroup(site, siteIndex = 0) {
   const group = new THREE.Group()
+
+  const wreckMat = new THREE.MeshStandardMaterial({
+    color: 0x5a6258,
+    roughness: 0.85,
+    metalness: 0.5,
+  })
 
   const crate = new THREE.Mesh(
     new THREE.BoxGeometry(1.6, 1.1, 1.1),
@@ -72,6 +90,33 @@ export function buildSiteGroup(site) {
   crate.position.set(site.x, site.y + 0.55, site.z)
   crate.rotation.y = 0.6
   group.add(crate)
+
+  // broken hull section: a split cylinder lying on the floor, larger per site
+  const hullR = 2 + siteIndex * 0.5
+  const hull = new THREE.Mesh(
+    new THREE.CylinderGeometry(hullR, hullR, hullR * 3.2, 12, 1, true, 0, Math.PI * 1.25),
+    wreckMat,
+  )
+  hull.material.side = THREE.DoubleSide
+  hull.rotation.set(Math.PI / 2, 0, 0.9 + siteIndex)
+  hull.position.set(site.x - 7 - siteIndex, site.y + hullR * 0.4, site.z + 6)
+  group.add(hull)
+
+  // containers
+  for (let i = 0; i < 2 + siteIndex; i++) {
+    const c = new THREE.Mesh(new THREE.BoxGeometry(2.2, 1.4, 1.3), wreckMat)
+    const a = i * 2.4 + siteIndex
+    c.position.set(site.x + Math.cos(a) * (6 + i), site.y + 0.6, site.z + Math.sin(a) * (6 + i))
+    c.rotation.y = a
+    c.rotation.z = (i % 2) * 0.35
+    group.add(c)
+  }
+
+  // fallen antenna mast
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.2, 9 + siteIndex * 2, 6), wreckMat)
+  mast.rotation.set(Math.PI / 2 - 0.12, 0, 0.4 + siteIndex * 0.7)
+  mast.position.set(site.x + 4, site.y + 0.5, site.z - 8)
+  group.add(mast)
 
   const fragmentMaterial = new THREE.MeshStandardMaterial({
     color: 0x2e3b44,
@@ -94,6 +139,23 @@ export function buildSiteGroup(site) {
   const meshes = new Map()
   for (const e of site.entities) {
     let mesh
+    if (e.kind === 'core') {
+      // the evidence core: a slowly pulsing deep-red vault of answers
+      mesh = new THREE.Mesh(
+        new THREE.IcosahedronGeometry(0.55, 1),
+        new THREE.MeshStandardMaterial({
+          color: 0x401418,
+          emissive: 0xc23030,
+          emissiveIntensity: 2.2,
+          roughness: 0.3,
+          metalness: 0.4,
+        }),
+      )
+      mesh.position.set(e.x, e.y + 0.4, e.z)
+      group.add(mesh)
+      meshes.set(e.id, mesh)
+      continue
+    }
     if (e.kind === 'cradle') {
       // the salvage cradle: an open frame the sub is assembled in
       mesh = new THREE.Group()
