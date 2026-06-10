@@ -49,6 +49,14 @@ export const RECIPES = [
       s.suitTier = 2
     },
   },
+  {
+    id: 'sub',
+    name: 'Submersible MK1',
+    cost: { scrap: 8, biolume: 2 },
+    fragmentsNeeded: 3,
+    cradleOnly: true,
+    desc: 'A one-person sub. Hull rated to 300m. Assemble at the salvage cradle.',
+  },
 ]
 
 // Signals: the entire quest system (spec section 5). M4 ships the first two;

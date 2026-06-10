@@ -29,11 +29,17 @@ export function siteDefs(seed, density) {
         { kind: 'fragment', recipeId: 'suit2' },
         { kind: 'fragment', recipeId: 'suit2' },
         { kind: 'fragment', recipeId: 'suit2' },
+        { kind: 'fragment', recipeId: 'sub' },
+        { kind: 'fragment', recipeId: 'sub' },
+        { kind: 'fragment', recipeId: 'sub' },
+        { kind: 'pickup', item: 'scrap' },
+        { kind: 'pickup', item: 'scrap' },
         { kind: 'pickup', item: 'scrap' },
         { kind: 'pickup', item: 'scrap' },
         { kind: 'pickup', item: 'biolume' },
         { kind: 'pickup', item: 'biolume' },
         { kind: 'log', logId: 'log-sig2' },
+        { kind: 'cradle' },
       ],
     },
   ]
@@ -88,6 +94,32 @@ export function buildSiteGroup(site) {
   const meshes = new Map()
   for (const e of site.entities) {
     let mesh
+    if (e.kind === 'cradle') {
+      // the salvage cradle: an open frame the sub is assembled in
+      mesh = new THREE.Group()
+      const frameMat = new THREE.MeshStandardMaterial({
+        color: 0x55636b,
+        roughness: 0.55,
+        metalness: 0.7,
+        emissive: 0x123038,
+        emissiveIntensity: 0.5,
+      })
+      for (const side of [-1, 1]) {
+        const rail = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.3, 6), frameMat)
+        rail.position.set(side * 2, 0.15, 0)
+        mesh.add(rail)
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.25, 2.4, 0.25), frameMat)
+        post.position.set(side * 2, 1.2, -2.6)
+        mesh.add(post)
+      }
+      const beam = new THREE.Mesh(new THREE.BoxGeometry(4.3, 0.25, 0.25), frameMat)
+      beam.position.set(0, 2.3, -2.6)
+      mesh.add(beam)
+      mesh.position.set(e.x, e.y - 0.4, e.z)
+      group.add(mesh)
+      meshes.set(e.id, mesh)
+      continue
+    }
     if (e.kind === 'fragment') {
       mesh = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.5, 0.12), fragmentMaterial)
       mesh.rotation.set(-0.4, Math.abs(e.x * 13) % 1, 0) // deterministic scatter

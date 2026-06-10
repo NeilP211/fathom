@@ -32,6 +32,8 @@ import {
   SIGNALS,
 } from './game/state.js'
 import { saveGame, loadGame } from './game/save.js'
+import { createSubState, tickSub, createSubMesh, subCrushDepth } from './game/sub.js'
+import { SubController } from './player/subController.js'
 import { createBuoy, inBuoyZone, BUOY_POS } from './game/buoy.js'
 import { PickupField } from './game/pickups.js'
 import { siteDefs, buildSiteGroup } from './game/sites.js'
@@ -102,17 +104,37 @@ async function main() {
 
   // Survival (M4)
   let state = createState()
+  const subState = createSubState()
   const loaded = await loadGame(SEED).catch(() => null)
   if (loaded) {
     state = deserialize(loaded.state)
     Object.assign(controller.state.pos, loaded.pos)
+    if (loaded.sub) Object.assign(subState, loaded.sub)
   }
+
+  // The sub (M5)
+  const subMesh = createSubMesh()
+  subMesh.visible = subState.built
+  scene.add(subMesh)
+  const subController = new SubController(camera, canvas, density, subState)
+  let aboard = false
+  let modeCooldown = 0
 
   const gameHud = new GameHud(document.getElementById('gamehud'))
   const pda = new Pda(document.getElementById('pda'), {
     onCraft: (id) => {
       if (craft(state, id)) {
         gameHud.toast(`CRAFTED: ${id.toUpperCase()}`)
+        if (id === 'sub') {
+          // assembled in the cradle: spawn it beside the player
+          subState.built = true
+          subState.x = controller.state.pos.x + 4
+          subState.y = controller.state.pos.y + 1
+          subState.z = controller.state.pos.z
+          subState.yaw = controller.state.yaw
+          subMesh.visible = true
+          gameHud.toast('THE SUB IS YOURS - E at the hull to board')
+        }
         autosave()
       }
     },
@@ -140,7 +162,11 @@ async function main() {
     if (saving || state.dead) return
     saving = true
     try {
-      await saveGame(SEED, { state: serialize(state), pos: { ...controller.state.pos } })
+      await saveGame(SEED, {
+        state: serialize(state),
+        pos: { ...controller.state.pos },
+        sub: { ...subState },
+      })
     } finally {
       saving = false
     }
@@ -207,6 +233,10 @@ async function main() {
       const d = Math.hypot(pos.x - BUOY_POS.x, pos.y - -7, pos.z - BUOY_POS.z)
       if (d < 3.5) best = { type: 'fabricator' }
     }
+    if (!best && subState.built) {
+      const d = Math.hypot(pos.x - subState.x, pos.y - subState.y, pos.z - subState.z)
+      if (d < 3.4) best = { type: 'board' }
+    }
     return best
   }
 
@@ -227,9 +257,22 @@ async function main() {
       gameHud.toast('LOG RECOVERED - see journal (TAB)')
       autosave()
     } else if (target.type === 'fabricator') {
+      pda.atCradle = false
       setPda(true)
       pda.tab = 'craft'
       pda.render()
+    } else if (target.type === 'cradle') {
+      pda.atCradle = true
+      setPda(true)
+      pda.tab = 'craft'
+      pda.render()
+    } else if (target.type === 'board') {
+      aboard = true
+      modeCooldown = 0.6
+      subController.enter(controller.state.pos)
+      audio.setInside(true)
+      gameHud.toast('ABOARD - cabin air online')
+      autosave()
     }
   }
 
@@ -245,10 +288,14 @@ async function main() {
     if (snap) {
       state = deserialize(snap.state)
       Object.assign(controller.state.pos, snap.pos)
+      if (snap.sub) Object.assign(subState, snap.sub)
     } else {
       state = createState()
       Object.assign(controller.state.pos, SPAWN)
     }
+    aboard = false
+    audio.setInside(false)
+    subMesh.visible = subState.built
     controller.state.vel = { x: 0, y: 0, z: 0 }
     pickups.rebuild(controller.state.pos, state.consumed)
     for (const [id, mesh] of siteMeshes) mesh.visible = !state.consumed.includes(id)
@@ -261,10 +308,15 @@ async function main() {
     stats: {},
     seed: SEED,
     controller,
+    subController,
+    subState,
     chunkManager,
     audio,
     get state() {
       return state
+    },
+    get aboard() {
+      return aboard
     },
     setState(s) {
       state = s
@@ -283,10 +335,47 @@ async function main() {
     elapsed += dt
     uTime.value = elapsed
 
+    modeCooldown = Math.max(0, modeCooldown - dt)
     controller.maxSpeed = 3 * state.speedMult
-    controller.update(dt)
-    const pos = controller.state.pos
+    if (aboard) {
+      subController.update(dt)
+      // the diver rides along (keeps streaming/save anchors coherent)
+      Object.assign(controller.state.pos, subController.state.pos)
+      controller.state.vel = { x: 0, y: 0, z: 0 }
+    } else {
+      controller.update(dt)
+    }
+    const pos = aboard ? subController.state.pos : controller.state.pos
     const depth = -pos.y
+
+    // sub pose + systems
+    if (subState.built) {
+      subMesh.position.set(subState.x, subState.y, subState.z)
+      subMesh.rotation.set(aboard ? -subController.state.pitch * 0.5 : 0, subState.yaw, 0, 'YXZ')
+      subState.lights = aboard && flashlight.visible
+      const subEvents = tickSub(
+        subState,
+        {
+          depth: -subState.y,
+          throttle: aboard ? subController.throttle : 0,
+          atBuoy: inBuoyZone({ x: subState.x, y: subState.y, z: subState.z }),
+        },
+        dt,
+      )
+      gameHud.setSubMode({
+        aboard,
+        power: subState.power,
+        hull: subState.hull,
+        stress: subEvents.includes('hull-stress') || subEvents.includes('crush-damage'),
+      })
+      if (subEvents.includes('crush-damage') && Math.random() < dt * 2) {
+        gameHud.toast(`HULL FAILING - rated ${subCrushDepth(subState)}m`)
+      }
+      if (subEvents.includes('sub-destroyed') && aboard && !dying) handleDeath()
+      audio.setEngine(aboard ? subController.throttle : 0)
+    } else {
+      gameHud.setSubMode(null)
+    }
 
     // Depth grading (M2)
     const visibility = visibilityAtDepth(depth)
@@ -324,8 +413,10 @@ async function main() {
     // Survival (M4)
     if (!dying) {
       const inZone = inBuoyZone(pos)
-      const speed = Math.hypot(controller.state.vel.x, controller.state.vel.y, controller.state.vel.z)
-      const env = { depth, refilling: pos.y > -3 || inZone, moving: speed > 1.2 }
+      const speed = aboard
+        ? 0
+        : Math.hypot(controller.state.vel.x, controller.state.vel.y, controller.state.vel.z)
+      const env = { depth, refilling: pos.y > -3 || inZone || aboard, moving: speed > 1.2 }
       const events = tick(state, env, dt)
       if (events.includes('blackout-start')) gameHud.toast('OUT OF AIR')
       if (events.includes('death')) handleDeath()
@@ -345,8 +436,27 @@ async function main() {
 
       pickups.update(pos, state.consumed)
 
+      // aboard: the only interaction is disembarking
+      if (aboard) {
+        gameHud.setPrompt('E - disembark')
+        gameHud.setScanProgress(null)
+        if (eHeld && modeCooldown === 0) {
+          eHeld = false
+          aboard = false
+          modeCooldown = 0.6
+          const hatch = subController.exit()
+          Object.assign(controller.state.pos, hatch)
+          controller.state.vel = { x: 0, y: 0, z: 0 }
+          audio.setInside(false)
+          if (depth > suitRating(state)) {
+            gameHud.toast(`WARNING: suit rated ${suitRating(state)}m - pressure damage`)
+          }
+          autosave()
+        }
+      }
+
       // interaction
-      const target = pdaOpen ? null : findTarget(pos)
+      const target = pdaOpen || aboard ? null : findTarget(pos)
       if (target) {
         if (target.type === 'fragment') {
           const hasScanner = state.crafted.includes('scanner')
@@ -379,9 +489,11 @@ async function main() {
             pickup: `E - collect ${target.entity?.item}`,
             log: 'E - recover log',
             fabricator: 'E - fabricator',
+            cradle: 'E - salvage cradle',
+            board: 'E - board the sub',
           }
           gameHud.setPrompt(labels[target.type])
-          if (eHeld) {
+          if (eHeld && modeCooldown === 0) {
             eHeld = false
             interactTap(target)
           }

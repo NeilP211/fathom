@@ -25,7 +25,8 @@ export function resolveCollision(density, pos, radius = PLAYER_RADIUS) {
 
 // state: { pos, vel, yaw, pitch }; input: { forward, strafe, up } each in [-1, 1].
 // maxSpeed scales with gear (fins multiply it; spec section 5 crafting).
-export function stepMovement(state, input, dt, density, maxSpeed = MAX_SPEED) {
+// radius: collision capsule (diver 0.6m, sub 1.6m).
+export function stepMovement(state, input, dt, density, maxSpeed = MAX_SPEED, radius = PLAYER_RADIUS) {
   // Look-relative movement basis (yaw only; pitch applies to forward's y).
   const sy = Math.sin(state.yaw)
   const cy = Math.cos(state.yaw)
@@ -89,5 +90,5 @@ export function stepMovement(state, input, dt, density, maxSpeed = MAX_SPEED) {
     if (state.vel.y > 0) state.vel.y = 0
   }
 
-  resolveCollision(density, state.pos)
+  resolveCollision(density, state.pos, radius)
 }
