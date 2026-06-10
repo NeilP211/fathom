@@ -14,6 +14,8 @@ export class DiveController {
       pitch: 0,
     }
     this.keys = new Set()
+    this.maxSpeed = 3 // scaled by gear from game state (fins)
+    this.frozen = false // death/PDA freeze
 
     canvas.addEventListener('click', () => canvas.requestPointerLock())
     document.addEventListener('mousemove', (e) => {
@@ -40,12 +42,12 @@ export class DiveController {
         (k.has('Space') ? 1 : 0) +
         (k.has('ShiftLeft') || k.has('ShiftRight') || k.has('KeyC') ? -1 : 0),
     }
-    if (!this.locked) {
+    if (!this.locked || this.frozen) {
       input.forward = 0
       input.strafe = 0
       input.up = 0
     }
-    stepMovement(this.state, input, dt, this.density)
+    stepMovement(this.state, input, dt, this.density, this.maxSpeed)
     this.camera.rotation.order = 'YXZ'
     this.camera.rotation.y = this.state.yaw
     this.camera.rotation.x = this.state.pitch

@@ -120,6 +120,9 @@ export class VegetationField {
     this.coral = new THREE.InstancedMesh(createCoralGeometry(), coralMaterial, CORAL_CAP)
     this.kelp.count = 0
     this.coral.count = 0
+    // instances spread far from the geometry's local bound; cull manually never
+    this.kelp.frustumCulled = false
+    this.coral.frustumCulled = false
     this.group = new THREE.Group()
     this.group.add(this.kelp)
     this.group.add(this.coral)

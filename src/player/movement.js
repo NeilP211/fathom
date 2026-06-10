@@ -24,7 +24,8 @@ export function resolveCollision(density, pos, radius = PLAYER_RADIUS) {
 }
 
 // state: { pos, vel, yaw, pitch }; input: { forward, strafe, up } each in [-1, 1].
-export function stepMovement(state, input, dt, density) {
+// maxSpeed scales with gear (fins multiply it; spec section 5 crafting).
+export function stepMovement(state, input, dt, density, maxSpeed = MAX_SPEED) {
   // Look-relative movement basis (yaw only; pitch applies to forward's y).
   const sy = Math.sin(state.yaw)
   const cy = Math.cos(state.yaw)
@@ -66,16 +67,17 @@ export function stepMovement(state, input, dt, density) {
 
   // Speed cap.
   const speed = Math.hypot(state.vel.x, state.vel.y, state.vel.z)
-  if (speed > MAX_SPEED) {
-    const s = MAX_SPEED / speed
+  if (speed > maxSpeed) {
+    const s = maxSpeed / speed
     state.vel.x *= s
     state.vel.y *= s
     state.vel.z *= s
   }
   // Vertical cap: ascending/descending is slightly slower than swimming
   // horizontally (spec section 4 movement model).
-  if (state.vel.y > MAX_VERTICAL_SPEED) state.vel.y = MAX_VERTICAL_SPEED
-  else if (state.vel.y < -MAX_VERTICAL_SPEED) state.vel.y = -MAX_VERTICAL_SPEED
+  const maxVert = maxSpeed * (MAX_VERTICAL_SPEED / MAX_SPEED)
+  if (state.vel.y > maxVert) state.vel.y = maxVert
+  else if (state.vel.y < -maxVert) state.vel.y = -maxVert
 
   state.pos.x += state.vel.x * dt
   state.pos.y += state.vel.y * dt
