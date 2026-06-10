@@ -1,0 +1,31 @@
+import { createNoise2D, createNoise3D } from 'simplex-noise'
+import alea from 'alea'
+
+// density > 0 is solid rock, <= 0 is water; approximate meters near the surface.
+// IMPORTANT (spec section 13): each createNoiseXD call gets its own fresh alea
+// instance, or the world silently changes.
+export function createDensityField(seed) {
+  const floorNoise = createNoise2D(alea(`${seed}:floor`))
+  const reliefNoise = createNoise3D(alea(`${seed}:relief`))
+  const carveNoise = createNoise3D(alea(`${seed}:carve`))
+
+  function fbm2(x, z) {
+    let v = 0, amp = 1, f = 1, norm = 0
+    for (let o = 0; o < 4; o++) {
+      v += amp * floorNoise(x * f, z * f)
+      norm += amp
+      amp *= 0.5
+      f *= 2
+    }
+    return v / norm // in [-1, 1]
+  }
+
+  return function density(x, y, z) {
+    const floorY = -45 + 18 * fbm2(x * 0.008, z * 0.008)
+    let d = floorY - y // positive below the seafloor surface
+    d += 6 * reliefNoise(x * 0.03, y * 0.03, z * 0.03) // rocky relief and overhangs
+    const carve = carveNoise(x * 0.02, y * 0.02, z * 0.02)
+    if (carve > 0.45) d -= (carve - 0.45) * 40 // cave tunnels through the rock
+    return d
+  }
+}
