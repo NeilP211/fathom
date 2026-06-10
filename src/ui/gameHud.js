@@ -11,6 +11,7 @@ export class GameHud {
   constructor(root) {
     root.innerHTML = `
       <div id="compass"><div id="compass-inner"></div></div>
+      <div id="objective"></div>
       <div id="bars">
         <div class="bar o2"><div class="fill" id="o2fill"></div><span>O2</span></div>
         <div class="bar hp"><div class="fill" id="hpfill"></div><span>HP</span></div>
@@ -31,7 +32,7 @@ export class GameHud {
         that passes. The evidence is on its way to people who will argue about
         it in bright rooms very far from the water.</p>
         <p>You went dark. You went quiet. You went up.</p>
-        <small>the ocean is still open - keep diving, or clear your save from the browser to start over</small>
+        <small>click to keep diving - the ocean is still open</small>
       </div>
     `
     this.o2fill = root.querySelector('#o2fill')
@@ -50,7 +51,15 @@ export class GameHud {
     this.deathEl = root.querySelector('#deathscreen')
     this.creditsEl = root.querySelector('#credits')
     this.compassInner = root.querySelector('#compass-inner')
+    this.objectiveEl = root.querySelector('#objective')
     this.degraded = false
+  }
+
+  setObjective(text) {
+    if (this.objectiveEl.textContent !== (text || '')) {
+      this.objectiveEl.textContent = text || ''
+    }
+    this.objectiveEl.style.display = text ? 'block' : 'none'
   }
 
   setDegraded(flag) {
@@ -59,6 +68,14 @@ export class GameHud {
 
   showCredits() {
     this.creditsEl.style.display = 'flex'
+    // the postgame must be reachable: any click dismisses the credits
+    this.creditsEl.addEventListener(
+      'click',
+      () => {
+        this.creditsEl.style.display = 'none'
+      },
+      { once: true },
+    )
   }
 
   toast(text) {
@@ -142,7 +159,8 @@ export class GameHud {
       const rel = wrapPi(ang - yaw)
       const dist = Math.hypot(signalTarget.x - pos.x, signalTarget.z - pos.z)
       const xPct = Math.max(2, Math.min(98, 50 + (rel / 1.15) * 50))
-      html += `<b style="left:${xPct}%">&#9660;<u>${dist.toFixed(0)}m</u></b>`
+      const label = signalTarget.label ? ` ${signalTarget.label}` : ''
+      html += `<b style="left:${xPct}%">&#9660;<u>${dist.toFixed(0)}m${label}</u></b>`
     }
     for (const c of contacts) {
       const ang = Math.atan2(c.x - pos.x, -(c.z - pos.z))
