@@ -674,17 +674,42 @@ async function main() {
         scanTimer = 0
       }
 
-      // active signal: latest fired whose log is not yet recovered; with the
-      // core aboard the only objective is home
+      // The objective line: a new player should always know the next concrete
+      // step. Drives both the HUD text and the compass marker.
       let signalTarget = null
-      for (const id of state.firedSignals) {
-        const sig = SIGNALS.find((x) => x.id === id)
-        if (sig && !state.logs.includes(sig.log)) {
-          const site = sites.find((s) => s.id === id)
-          if (site) signalTarget = { x: site.x, z: site.z }
+      let objective = null
+      if (state.flags.finished) {
+        objective = null
+      } else if (state.flags.coreRecovered) {
+        objective = 'GO DARK. GO QUIET. GO UP. Surface with the core.'
+        signalTarget = { x: 0, z: 0, label: 'HOME' }
+      } else if (!state.crafted.includes('scanner')) {
+        const scrap = state.inventory.scrap || 0
+        if (scrap < 2) {
+          objective = `collect scrap from the seafloor (${scrap}/2) - the grey clusters on the bottom (E)`
+          signalTarget = scrap > 0 ? { x: 0, z: 0, label: 'BUOY' } : null
+        } else {
+          objective = 'craft the SCANNER at the buoy fabricator (the cage below the blinking light)'
+          signalTarget = { x: 0, z: 0, label: 'BUOY' }
+        }
+      } else {
+        for (const id of [...state.firedSignals].reverse()) {
+          const sig = SIGNALS.find((x) => x.id === id)
+          if (sig && !state.logs.includes(sig.log)) {
+            const site = sites.find((s) => s.id === id)
+            if (site) {
+              objective = 'follow the SIGNAL marker - scan fragments (hold E), recover the log slate'
+              signalTarget = { x: site.x, z: site.z, label: 'SIGNAL' }
+            }
+            break
+          }
+        }
+        if (!signalTarget && state.firedSignals.length < SIGNALS.length) {
+          objective = 'listen at a radio: the buoy, or aboard the sub'
+          signalTarget = { x: 0, z: 0, label: 'BUOY' }
         }
       }
-      if (enraged) signalTarget = { x: 0, z: 0 }
+      gameHud.setObjective(objective)
 
       // the Floor eats instruments (spec section 5 depth bands)
       const degraded = depth > 600
