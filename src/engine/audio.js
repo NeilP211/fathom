@@ -75,7 +75,52 @@ export class AudioEngine {
 
     noise.start()
     lfo.start()
+
+    // Interior layer (idle until the player is inside the sub): a low cabin
+    // hum plus an engine tone that follows throttle. All synthesized.
+    this.hum = ctx.createOscillator()
+    this.hum.type = 'triangle'
+    this.hum.frequency.value = 52
+    this.humGain = ctx.createGain()
+    this.humGain.gain.value = 0
+    this.hum.connect(this.humGain)
+    this.humGain.connect(this.interior)
+    this.hum.start()
+
+    this.engine = ctx.createOscillator()
+    this.engine.type = 'sawtooth'
+    this.engine.frequency.value = 38
+    this.engineFilter = ctx.createBiquadFilter()
+    this.engineFilter.type = 'lowpass'
+    this.engineFilter.frequency.value = 160
+    this.engineGain = ctx.createGain()
+    this.engineGain.gain.value = 0
+    this.engine.connect(this.engineFilter)
+    this.engineFilter.connect(this.engineGain)
+    this.engineGain.connect(this.interior)
+    this.engine.start()
+
+    this.inside = false
     if (ctx.state === 'suspended') ctx.resume()
+  }
+
+  // Inside the sub the world collapses to a muffled rumble and the cabin
+  // comes alive (spec section 7 two-bus design).
+  setInside(inside) {
+    if (!this.ctx || this.inside === inside) return
+    this.inside = inside
+    const t = this.ctx.currentTime
+    this.exterior.gain.setTargetAtTime(inside ? 0.35 : 1, t, 0.3)
+    this.humGain.gain.setTargetAtTime(inside ? 0.1 : 0, t, 0.4)
+    if (!inside) this.engineGain.gain.setTargetAtTime(0, t, 0.2)
+  }
+
+  // throttle 0..1; only audible inside.
+  setEngine(throttle) {
+    if (!this.ctx || !this.inside) return
+    const t = this.ctx.currentTime
+    this.engineGain.gain.setTargetAtTime(throttle * 0.12, t, 0.15)
+    this.engine.frequency.setTargetAtTime(38 + throttle * 30, t, 0.15)
   }
 
   // Throttled to ~5Hz: stacking setTargetAtTime every frame degrades the
@@ -85,6 +130,8 @@ export class AudioEngine {
     const now = this.ctx.currentTime
     if (now - this.lastDepthUpdate < 0.2) return
     this.lastDepthUpdate = now
-    this.exteriorFilter.frequency.setTargetAtTime(cutoffForDepth(depth), now, 0.25)
+    // Inside the sub the hull caps everything at a rumble regardless of depth.
+    const cutoff = this.inside ? Math.min(cutoffForDepth(depth), 300) : cutoffForDepth(depth)
+    this.exteriorFilter.frequency.setTargetAtTime(cutoff, now, 0.25)
   }
 }

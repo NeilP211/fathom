@@ -63,6 +63,9 @@ export class Pda {
           const have = s.fragments[r.id] || 0
           return `<div class="row locked"><span>${r.name}</span><b>fragments ${have}/${r.fragmentsNeeded}</b></div>`
         }
+        if (r.cradleOnly && !this.atCradle) {
+          return `<div class="row locked"><span>${r.name}<small>${r.desc}</small></span><b>CRADLE ONLY</b></div>`
+        }
         const ok = canCraft(s, r.id)
         return `<div class="row"><span>${r.name}<small>${r.desc} (${cost})</small></span>` +
           `<button data-craft="${r.id}" ${ok ? '' : 'disabled'}>CRAFT</button></div>`

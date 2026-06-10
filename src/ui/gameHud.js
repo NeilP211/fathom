@@ -14,7 +14,10 @@ export class GameHud {
       <div id="bars">
         <div class="bar o2"><div class="fill" id="o2fill"></div><span>O2</span></div>
         <div class="bar hp"><div class="fill" id="hpfill"></div><span>HP</span></div>
+        <div class="bar pwr" style="display:none"><div class="fill" id="pwrfill"></div><span>PWR</span></div>
+        <div class="bar hull" style="display:none"><div class="fill" id="hullfill"></div><span>HULL</span></div>
       </div>
+      <div id="crushwarn" style="display:none">HULL STRESS</div>
       <div id="depth-readout">0m</div>
       <div id="prompt"></div>
       <div id="scanring"><div id="scanfill"></div></div>
@@ -24,6 +27,11 @@ export class GameHud {
     `
     this.o2fill = root.querySelector('#o2fill')
     this.hpfill = root.querySelector('#hpfill')
+    this.pwrBar = root.querySelector('.bar.pwr')
+    this.hullBar = root.querySelector('.bar.hull')
+    this.pwrfill = root.querySelector('#pwrfill')
+    this.hullfill = root.querySelector('#hullfill')
+    this.crushwarn = root.querySelector('#crushwarn')
     this.depthEl = root.querySelector('#depth-readout')
     this.promptEl = root.querySelector('#prompt')
     this.scanring = root.querySelector('#scanring')
@@ -60,6 +68,19 @@ export class GameHud {
 
   showDeath(show) {
     this.deathEl.style.display = show ? 'flex' : 'none'
+  }
+
+  // sub: { aboard, power, hull, stress } | null
+  setSubMode(sub) {
+    const aboard = !!(sub && sub.aboard)
+    this.pwrBar.style.display = aboard ? 'block' : 'none'
+    this.hullBar.style.display = aboard ? 'block' : 'none'
+    if (aboard) {
+      this.pwrfill.style.width = `${sub.power}%`
+      this.hullfill.style.width = `${sub.hull}%`
+      this.hullfill.style.background = sub.hull < 35 ? '#e04f3a' : '#7aa3c8'
+    }
+    this.crushwarn.style.display = aboard && sub.stress ? 'block' : 'none'
   }
 
   // signalTarget: {x, z, name} | null
