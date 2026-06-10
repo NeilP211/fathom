@@ -51,22 +51,51 @@ export function opsForChunk(ops, cx, cy, cz, chunkSize) {
   })
 }
 
-// M2: one authored test site proving the pipeline (spec section 6 requires
-// this in milestone 2, not milestone 7). A carved clearing on the seafloor
-// near spawn with wreck debris forms inside it. Placement derives from the
-// seed via the deterministic floor height.
+// Story geography (M7): all five Meridian sites sit on a seeded corridor
+// bearing at increasing distance, so increasing depth (the descent profile is
+// radial). This module is the single source of truth for site positions:
+// SDF stamps, loot sites, and the Hunter's lair all derive from it.
+import alea from 'alea'
+
+export const STORY_SITES = [
+  { id: 'sig1', dist: 230 },
+  { id: 'sig2', dist: 470 },
+  { id: 'sig3', dist: 760 },
+  { id: 'sig4', dist: 1060 },
+  { id: 'sig5', dist: 1380 },
+]
+
+export const HUNTER_LAIR_DIST = 620 // on the corridor, between sites 2 and 3
+
+export function corridorBearing(seed) {
+  return alea(`${seed}:corridor`)() * Math.PI * 2
+}
+
+// Returns [{id, x, y, z, dist}] with y = local floor height.
+export function sitePositionsForSeed(seed, density) {
+  const bearing = corridorBearing(seed)
+  const jitter = alea(`${seed}:corridor:jitter`)
+  return STORY_SITES.map((s) => {
+    const a = bearing + (jitter() - 0.5) * 0.22 // slight wander, same heading
+    const x = Math.cos(a) * s.dist
+    const z = Math.sin(a) * s.dist
+    return { id: s.id, x, y: density.floorY(x, z), z, dist: s.dist }
+  })
+}
+
+// SDF stamps: the tutorial clearing near spawn plus a carved clearing and
+// debris field at every story site (bigger with depth).
 export function anchorsForSeed(seed, density) {
-  const fx = 64
-  const fz = 64
-  const fy = density.floorY(fx, fz)
-  return [
-    // flatten a clearing: carve from 2m below the local floor up to +12m
-    { type: 'carve', center: [fx, fy + 5, fz], half: [14, 7, 14] },
-    // hull section
-    { type: 'add', center: [fx - 5, fy - 0.6, fz + 3], half: [4, 1.6, 1.5] },
-    // crate row
-    { type: 'add', center: [fx + 6, fy - 0.9, fz - 4], half: [1.5, 1.2, 3] },
-    // fallen beam
-    { type: 'add', center: [fx, fy - 1.2, fz + 8], half: [2.5, 0.9, 0.9] },
-  ]
+  const ops = []
+  const clearing = (fx, fz, size) => {
+    const fy = density.floorY(fx, fz)
+    ops.push({ type: 'carve', center: [fx, fy + 5, fz], half: [size, 7, size] })
+    ops.push({ type: 'add', center: [fx - size * 0.35, fy - 0.6, fz + size * 0.2], half: [4, 1.6, 1.5] })
+    ops.push({ type: 'add', center: [fx + size * 0.4, fy - 0.9, fz - size * 0.3], half: [1.5, 1.2, 3] })
+    ops.push({ type: 'add', center: [fx, fy - 1.2, fz + size * 0.55], half: [2.5, 0.9, 0.9] })
+  }
+  clearing(64, 64, 14) // the tutorial wreck (M2)
+  const sites = sitePositionsForSeed(seed, density)
+  sites.forEach((s, i) => clearing(s.x, s.z, 14 + i * 3))
+  return ops
 }

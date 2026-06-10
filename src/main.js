@@ -127,8 +127,20 @@ async function main() {
   const gameHud = new GameHud(document.getElementById('gamehud'))
   const pda = new Pda(document.getElementById('pda'), {
     onCraft: (id) => {
+      if ((id === 'hull2' || id === 'hull3') && !subState.built) {
+        gameHud.toast('hull plating needs a sub to bolt onto')
+        return
+      }
       if (craft(state, id)) {
         gameHud.toast(`CRAFTED: ${id.toUpperCase()}`)
+        if (id === 'hull2') {
+          subState.tier = 2
+          gameHud.toast('SUB RATED TO 600m')
+        }
+        if (id === 'hull3') {
+          subState.tier = 3
+          gameHud.toast('SUB RATED TO 900m - the bottom is open')
+        }
         if (id === 'sub') {
           // assembled in the cradle: spawn it beside the player
           subState.built = true
@@ -275,6 +287,12 @@ async function main() {
       recoverLog(state, e.logId)
       consumeEntity(e.id, target.mesh)
       gameHud.toast('LOG RECOVERED - see journal (TAB)')
+      autosave()
+    } else if (target.type === 'core') {
+      state.flags.coreRecovered = true
+      consumeEntity(e.id, target.mesh)
+      gameHud.toast('EVIDENCE CORE RECOVERED')
+      gameHud.toast('GO DARK. GO QUIET. GO UP.')
       autosave()
     } else if (target.type === 'fabricator') {
       pda.atCradle = false
@@ -440,7 +458,12 @@ async function main() {
       const speed = aboard
         ? 0
         : Math.hypot(controller.state.vel.x, controller.state.vel.y, controller.state.vel.z)
-      const env = { depth, refilling: pos.y > -3 || inZone || aboard, moving: speed > 1.2 }
+      // the cabin holds one atmosphere: suit pressure only applies in the water
+      const env = {
+        depth: aboard ? 0 : depth,
+        refilling: pos.y > -3 || inZone || aboard,
+        moving: speed > 1.2,
+      }
       const events = tick(state, env, dt)
       if (events.includes('blackout-start')) gameHud.toast('OUT OF AIR')
       if (events.includes('death')) handleDeath()
@@ -449,7 +472,8 @@ async function main() {
         autosave()
         gameHud.toast('PROGRESS SAVED')
       }
-      if (inZone) {
+      // the radio lives at the buoy and in the sub (spec section 5)
+      if (inZone || aboard) {
         for (const sig of signalsToFire(state)) {
           markSignalFired(state, sig.id)
           gameHud.toast(`RADIO: ${sig.name}`)
@@ -477,8 +501,17 @@ async function main() {
         p.update(dt, playerRef, { noise, lights: flashlight.visible }, threatEvents)
       }
       const lure = flares.update(dt)
-      hunter.update(dt, playerRef, { noise, aboard }, threatEvents, lure)
+      const enraged = state.flags.coreRecovered && !state.flags.finished
+      hunter.update(dt, playerRef, { noise, aboard, enraged }, threatEvents, lure)
       sonar.update(dt, elapsed)
+
+      // the finale: surface with the core
+      if (enraged && pos.y > -4) {
+        state.flags.finished = true
+        gameHud.showCredits()
+        document.exitPointerLock()
+        autosave()
+      }
 
       // predators spook the fish school (repulsion stimuli at 5Hz)
       fearTimer -= dt
@@ -609,6 +642,7 @@ async function main() {
             node: `E - collect ${target.entity?.kind}`,
             pickup: `E - collect ${target.entity?.item}`,
             log: 'E - recover log',
+            core: 'E - recover the evidence core',
             fabricator: 'E - fabricator',
             cradle: 'E - salvage cradle',
             board: 'E - board the sub',
@@ -625,7 +659,8 @@ async function main() {
         scanTimer = 0
       }
 
-      // active signal: latest fired whose log is not yet recovered
+      // active signal: latest fired whose log is not yet recovered; with the
+      // core aboard the only objective is home
       let signalTarget = null
       for (const id of state.firedSignals) {
         const sig = SIGNALS.find((x) => x.id === id)
@@ -634,6 +669,13 @@ async function main() {
           if (site) signalTarget = { x: site.x, z: site.z }
         }
       }
+      if (enraged) signalTarget = { x: 0, z: 0 }
+
+      // the Floor eats instruments (spec section 5 depth bands)
+      const degraded = depth > 600
+      gameHud.setDegraded(degraded)
+      flashlight.distance = degraded ? 30 : 60
+
       const activeYaw = aboard ? subController.state.yaw : controller.state.yaw
       gameHud.update(state, depth, activeYaw, pos, signalTarget, sonar.contacts)
     }
@@ -645,7 +687,8 @@ async function main() {
       camera.updateProjectionMatrix()
     }
 
-    hint.style.display = controller.locked || pdaOpen || dying ? 'none' : 'flex'
+    hint.style.display =
+      controller.locked || pdaOpen || dying || state.flags.finished ? 'none' : 'flex'
     const info = {
       backendName,
       pos,

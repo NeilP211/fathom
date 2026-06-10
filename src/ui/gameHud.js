@@ -24,6 +24,15 @@ export class GameHud {
       <div id="toasts"></div>
       <div id="vignette"></div>
       <div id="deathscreen"><div>SIGNAL LOST</div><small>RECOVERED AT LAST SAVE</small></div>
+      <div id="credits">
+        <div class="title">FATHOM</div>
+        <p>The core broke the surface at dawn. Whatever Meridian woke is still
+        down there, circling the borehole, learning the sound of every engine
+        that passes. The evidence is on its way to people who will argue about
+        it in bright rooms very far from the water.</p>
+        <p>You went dark. You went quiet. You went up.</p>
+        <small>the ocean is still open - keep diving, or clear your save from the browser to start over</small>
+      </div>
     `
     this.o2fill = root.querySelector('#o2fill')
     this.hpfill = root.querySelector('#hpfill')
@@ -39,7 +48,17 @@ export class GameHud {
     this.toastsEl = root.querySelector('#toasts')
     this.vignette = root.querySelector('#vignette')
     this.deathEl = root.querySelector('#deathscreen')
+    this.creditsEl = root.querySelector('#credits')
     this.compassInner = root.querySelector('#compass-inner')
+    this.degraded = false
+  }
+
+  setDegraded(flag) {
+    this.degraded = flag
+  }
+
+  showCredits() {
+    this.creditsEl.style.display = 'flex'
   }
 
   toast(text) {
@@ -88,7 +107,13 @@ export class GameHud {
     this.o2fill.style.width = `${(100 * state.oxygen) / state.oxygenMax}%`
     this.o2fill.style.background = state.oxygen / state.oxygenMax < 0.25 ? '#e04f3a' : '#37c8ab'
     this.hpfill.style.width = `${state.health}%`
-    this.depthEl.textContent = `${depth.toFixed(0)}m`
+    // on the Floor the depth gauge stutters and lies (spec: instruments
+    // degrade; the lie doubles as foreshadowing)
+    if (this.degraded && Math.random() < 0.12) {
+      this.depthEl.textContent = `${(depth + (Math.random() * 160 - 80)).toFixed(0)}m`
+    } else {
+      this.depthEl.textContent = `${depth.toFixed(0)}m`
+    }
 
     // blackout vignette ramps as the grace window burns
     const black = state.oxygen <= 0 ? Math.min(1, state.blackout / 5) : 0
@@ -105,7 +130,10 @@ export class GameHud {
     for (const [label, ang] of marks) {
       const rel = wrapPi(ang - yaw)
       if (Math.abs(rel) < 1.15) {
-        const xPct = 50 + (rel / 1.15) * 50
+        // a degraded compass spins and drops ticks
+        if (this.degraded && Math.random() < 0.25) continue
+        const jitter = this.degraded ? (Math.random() - 0.5) * 14 : 0
+        const xPct = 50 + (rel / 1.15) * 50 + jitter
         html += `<i style="left:${xPct}%">${label}</i>`
       }
     }

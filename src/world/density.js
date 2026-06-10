@@ -27,8 +27,20 @@ export function createDensityField(seed) {
     return v / norm // in [-1, 1]
   }
 
+  // The descent (spec section 5 depth bands, M7): the Shelf holds within
+  // 250m of the origin, then the seafloor ramps smoothly down to an abyssal
+  // plain ~780m deep by 1500m out. Radial, so every bearing descends; the
+  // story corridor just picks one.
+  function descentAt(r) {
+    if (r <= 250) return 0
+    const t = Math.min((r - 250) / 1250, 1)
+    const s = t * t * (3 - 2 * t) // smoothstep
+    return 780 * s
+  }
+
   function floorY(x, z) {
-    return -45 + 18 * fbm2(x * 0.008, z * 0.008)
+    const r = Math.hypot(x, z)
+    return -45 - descentAt(r) + 18 * fbm2(x * 0.008, z * 0.008)
   }
 
   function atWithFloor(fY, x, y, z) {
@@ -42,5 +54,6 @@ export function createDensityField(seed) {
   const density = (x, y, z) => atWithFloor(floorY(x, z), x, y, z)
   density.floorY = floorY
   density.atWithFloor = atWithFloor
+  density.descentAt = descentAt
   return density
 }

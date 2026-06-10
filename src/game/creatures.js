@@ -3,6 +3,7 @@ import { Fn, uniform, positionLocal, vec3 } from 'three/tsl'
 import alea from 'alea'
 import { createFishGeometry } from '../fx/fishGeometry.js'
 import { noiseLevel, hunterMood, predatorBandFor, HUNTER_TUNING } from './threat.js'
+import { corridorBearing, HUNTER_LAIR_DIST } from '../world/anchors.js'
 
 // CPU creatures (spec section 5): the predator archetype and the Hunter.
 // Meshes are scaled dark fish silhouettes with a procedural tail wave; no
@@ -143,9 +144,12 @@ export class Predator {
 export class Hunter {
   constructor(seed, density, uTime) {
     this.density = density
-    const rng = alea(`${seed}:hunter`)
-    const a = rng() * Math.PI * 2
-    this.lair = { x: Math.cos(a) * 620, y: -40, z: Math.sin(a) * 620 }
+    // the lair sits ON the story corridor (spec: a known dread-zone the
+    // route crosses), hovering above the local floor
+    const a = corridorBearing(seed)
+    const lx = Math.cos(a) * HUNTER_LAIR_DIST
+    const lz = Math.sin(a) * HUNTER_LAIR_DIST
+    this.lair = { x: lx, y: density.floorY(lx, lz) + 20, z: lz }
     this.pos = { ...this.lair }
     this.mood = 'dormant'
     this.circleTimer = 0
@@ -168,6 +172,16 @@ export class Hunter {
     )
 
     this.mood = hunterMood(distToPlayer, env.noise)
+    // enraged (the finale ascent): it never sleeps and it knows where you are
+    if (env.enraged && (this.mood === 'dormant' || this.mood === 'dread')) {
+      this.mood = distToPlayer > HUNTER_TUNING.huntRadius ? 'dread' : 'hunting'
+      if (this.mood === 'dread' && distToPlayer > HUNTER_TUNING.dreadRadius) {
+        // close from any distance
+        this.pos.x += (dx / distToTarget) * 9 * dt
+        this.pos.y += (dy / distToTarget) * 9 * dt
+        this.pos.z += (dz / distToTarget) * 9 * dt
+      }
+    }
     this.circleTimer = Math.max(0, this.circleTimer - dt)
 
     // dormant: drift home, no body
@@ -194,7 +208,10 @@ export class Hunter {
 
     this.mesh.visible = this.mood !== 'dread' ? true : distToPlayer < HUNTER_TUNING.huntRadius * 1.1
 
-    let speed = HUNTER_TUNING.baseSpeed + env.noise * HUNTER_TUNING.noiseSpeedBonus
+    let speed =
+      HUNTER_TUNING.baseSpeed +
+      env.noise * HUNTER_TUNING.noiseSpeedBonus +
+      (env.enraged ? 2.5 : 0)
     let dir = { x: dx / distToTarget, y: dy / distToTarget, z: dz / distToTarget }
 
     if (this.circleTimer > 0) {
