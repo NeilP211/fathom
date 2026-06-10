@@ -53,7 +53,7 @@ export class Pda {
         : '<div class="empty">nothing collected yet</div>'
     } else if (this.tab === 'craft') {
       this.bodyEl.innerHTML = RECIPES.map((r) => {
-        const crafted = s.crafted.includes(r.id)
+        const crafted = !r.repeatable && s.crafted.includes(r.id)
         const known = r.known || (s.fragments[r.id] || 0) >= (r.fragmentsNeeded || Infinity)
         const cost = Object.entries(r.cost)
           .map(([i, n]) => `${i} x${n}`)

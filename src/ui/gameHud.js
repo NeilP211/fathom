@@ -83,8 +83,8 @@ export class GameHud {
     this.crushwarn.style.display = aboard && sub.stress ? 'block' : 'none'
   }
 
-  // signalTarget: {x, z, name} | null
-  update(state, depth, yaw, pos, signalTarget) {
+  // signalTarget: {x, z, name} | null; contacts: [{x, z, kind}]
+  update(state, depth, yaw, pos, signalTarget, contacts = []) {
     this.o2fill.style.width = `${(100 * state.oxygen) / state.oxygenMax}%`
     this.o2fill.style.background = state.oxygen / state.oxygenMax < 0.25 ? '#e04f3a' : '#37c8ab'
     this.hpfill.style.width = `${state.health}%`
@@ -115,6 +115,13 @@ export class GameHud {
       const dist = Math.hypot(signalTarget.x - pos.x, signalTarget.z - pos.z)
       const xPct = Math.max(2, Math.min(98, 50 + (rel / 1.15) * 50))
       html += `<b style="left:${xPct}%">&#9660;<u>${dist.toFixed(0)}m</u></b>`
+    }
+    for (const c of contacts) {
+      const ang = Math.atan2(c.x - pos.x, -(c.z - pos.z))
+      const rel = wrapPi(ang - yaw)
+      const xPct = Math.max(2, Math.min(98, 50 + (rel / 1.15) * 50))
+      const cls = c.kind === 'hunter' ? 'big' : ''
+      html += `<s class="${cls}" style="left:${xPct}%">&#9670;</s>`
     }
     this.compassInner.innerHTML = html
   }

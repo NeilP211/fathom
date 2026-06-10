@@ -39,6 +39,10 @@ import { PickupField } from './game/pickups.js'
 import { siteDefs, buildSiteGroup } from './game/sites.js'
 import { GameHud } from './ui/gameHud.js'
 import { Pda } from './ui/pda.js'
+import { Predator, Hunter } from './game/creatures.js'
+import { noiseLevel } from './game/threat.js'
+import { Sonar, SONAR_TUNING } from './fx/sonar.js'
+import { FlareSystem } from './game/flares.js'
 
 const SEED = 1986
 const SPAWN = { x: 0, y: -8, z: 0 }
@@ -156,6 +160,22 @@ async function main() {
       mesh.visible = !state.consumed.includes(id)
     }
   }
+
+  // The hunt (M6)
+  const predators = [0, 1, 2].map((i) => new Predator(SEED, i, density, uTime))
+  for (const p of predators) scene.add(p.mesh)
+  const hunter = new Hunter(SEED, density, uTime)
+  scene.add(hunter.mesh)
+  const sonar = new Sonar(scene)
+  const flares = new FlareSystem(scene)
+  let sonarRequested = false
+  let flareRequested = false
+  let fearTimer = 0
+  let lastDuck = -1
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyQ') sonarRequested = true
+    if (e.code === 'KeyG') flareRequested = true
+  })
 
   let saving = false
   async function autosave() {
@@ -312,6 +332,10 @@ async function main() {
     subState,
     chunkManager,
     audio,
+    hunter,
+    predators,
+    sonar,
+    flares,
     get state() {
       return state
     },
@@ -436,6 +460,103 @@ async function main() {
 
       pickups.update(pos, state.consumed)
 
+      // ---- the hunt (M6) ----
+      const playerSpeed = aboard
+        ? Math.hypot(subController.state.vel.x, subController.state.vel.y, subController.state.vel.z)
+        : speed
+      const noise = noiseLevel({
+        speed: playerSpeed,
+        maxSpeed: aboard ? 6 : controller.maxSpeed,
+        lights: flashlight.visible,
+        engineThrottle: aboard ? subController.throttle : 0,
+        sonarPingAge: sonar.pingAge(elapsed),
+      })
+      const threatEvents = []
+      const playerRef = { pos }
+      for (const p of predators) {
+        p.update(dt, playerRef, { noise, lights: flashlight.visible }, threatEvents)
+      }
+      const lure = flares.update(dt)
+      hunter.update(dt, playerRef, { noise, aboard }, threatEvents, lure)
+      sonar.update(dt, elapsed)
+
+      // predators spook the fish school (repulsion stimuli at 5Hz)
+      fearTimer -= dt
+      if (fearTimer <= 0) {
+        fearTimer = 0.2
+        for (const p of predators) stimulus.push(p.pos, -0.8, 16, 0.4)
+        if (hunter.mesh.visible) stimulus.push(hunter.pos, -1.2, 40, 0.4)
+      }
+
+      function applyPlayerDamage(amount, label) {
+        state.health -= amount
+        gameHud.toast(label)
+        if (state.health <= 0 && !state.dead) {
+          state.health = 0
+          state.dead = true
+          handleDeath()
+        }
+      }
+      for (const ev of threatEvents) {
+        if (ev.type === 'predator-hit' && !aboard) applyPlayerDamage(ev.damage, 'BITTEN')
+        else if (ev.type === 'hunter-rumble') audio.playRumble(ev.intensity)
+        else if (ev.type === 'hunter-strike-diver' && !aboard) {
+          controller.state.vel.x += ev.dir.x * 9
+          controller.state.vel.z += ev.dir.z * 9
+          applyPlayerDamage(ev.damage, 'SOMETHING ENORMOUS HIT YOU')
+        } else if (ev.type === 'hunter-strike-sub' && aboard) {
+          subState.hull = Math.max(0, subState.hull - ev.damage)
+          subController.state.vel.x += ev.dir.x * 7
+          subController.state.vel.z += ev.dir.z * 7
+          gameHud.toast('HULL IMPACT')
+          if (subState.hull <= 0) handleDeath()
+        }
+      }
+
+      // dread ducking follows the Hunter's mood
+      const duck = hunter.mood === 'dormant' ? 0 : hunter.mood === 'dread' ? 0.5 : 1
+      if (Math.abs(duck - lastDuck) > 0.05) {
+        lastDuck = duck
+        audio.setDuck(duck)
+      }
+
+      // sonar (sub only)
+      if (sonarRequested) {
+        sonarRequested = false
+        if (aboard && sonar.canPing(subState.power)) {
+          subState.power -= SONAR_TUNING.powerCost
+          const targets = []
+          const inRange = (x, z) => Math.hypot(x - pos.x, z - pos.z) < SONAR_TUNING.range
+          if (inRange(hunter.pos.x, hunter.pos.z)) {
+            targets.push({ x: hunter.pos.x, z: hunter.pos.z, kind: 'hunter' })
+          }
+          for (const p of predators) {
+            if (inRange(p.pos.x, p.pos.z)) targets.push({ x: p.pos.x, z: p.pos.z, kind: 'predator' })
+          }
+          for (const s of sites) {
+            if (inRange(s.x, s.z)) targets.push({ x: s.x, z: s.z, kind: 'site' })
+          }
+          sonar.ping(pos, targets, elapsed)
+          audio.playPing()
+          stimulus.push(pos, -1, 30, 2) // fish scatter from the blast
+          gameHud.toast(`sonar: ${targets.length} contact${targets.length === 1 ? '' : 's'}`)
+        }
+      }
+
+      // flares
+      if (flareRequested) {
+        flareRequested = false
+        if ((state.inventory.flare || 0) > 0) {
+          state.inventory.flare--
+          flares.drop(pos)
+          stimulus.push(pos, 0.9, 50, 25)
+          gameHud.toast('flare away')
+        } else {
+          gameHud.toast('no flares (craft at the fabricator)')
+        }
+      }
+      // ---- end the hunt ----
+
       // aboard: the only interaction is disembarking
       if (aboard) {
         gameHud.setPrompt('E - disembark')
@@ -513,7 +634,8 @@ async function main() {
           if (site) signalTarget = { x: site.x, z: site.z }
         }
       }
-      gameHud.update(state, depth, controller.state.yaw, pos, signalTarget)
+      const activeYaw = aboard ? subController.state.yaw : controller.state.yaw
+      gameHud.update(state, depth, activeYaw, pos, signalTarget, sonar.contacts)
     }
 
     // far plane tracks visibility (fog wall + margin)

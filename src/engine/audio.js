@@ -123,6 +123,49 @@ export class AudioEngine {
     this.engine.frequency.setTargetAtTime(38 + throttle * 30, t, 0.15)
   }
 
+  // A distant creature rumble: low sine boom + pitch sag. The dread channel.
+  playRumble(intensity = 1) {
+    if (!this.ctx) return
+    const ctx = this.ctx
+    const t = ctx.currentTime
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(34 + Math.random() * 8, t)
+    osc.frequency.exponentialRampToValueAtTime(21, t + 2.4)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.0001, t)
+    g.gain.linearRampToValueAtTime(0.24 * intensity, t + 0.4)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 2.8)
+    osc.connect(g)
+    g.connect(this.exterior)
+    osc.start(t)
+    osc.stop(t + 3)
+  }
+
+  // Sonar ping: a clean falling chirp on the interior bus.
+  playPing() {
+    if (!this.ctx) return
+    const ctx = this.ctx
+    const t = ctx.currentTime
+    const osc = ctx.createOscillator()
+    osc.type = 'sine'
+    osc.frequency.setValueAtTime(1320, t)
+    osc.frequency.exponentialRampToValueAtTime(660, t + 0.5)
+    const g = ctx.createGain()
+    g.gain.setValueAtTime(0.12, t)
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6)
+    osc.connect(g)
+    g.connect(this.interior)
+    osc.start(t)
+    osc.stop(t + 0.7)
+  }
+
+  // Duck the ambient bed while the Hunter is near (0 = calm, 1 = full dread).
+  setDuck(level) {
+    if (!this.ctx) return
+    this.bedGain.gain.setTargetAtTime(0.16 * (1 - 0.8 * level), this.ctx.currentTime, 0.6)
+  }
+
   // Throttled to ~5Hz: stacking setTargetAtTime every frame degrades the
   // audio thread (spec section 7: coalesce automation ramps).
   setDepth(depth) {
