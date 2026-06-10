@@ -12,6 +12,11 @@ import { DiveController } from './player/diveController.js'
 import { MarineSnow } from './fx/marineSnow.js'
 import { createTerrainMaterial } from './fx/terrainMaterial.js'
 import { createSurface } from './fx/surface.js'
+import { StimulusSystem } from './fx/stimulus.js'
+import { FishSchool } from './fx/fishSchool.js'
+import { AmbientFish } from './fx/ambientFish.js'
+import { VegetationField } from './fx/kelp.js'
+import { anchorsForSeed } from './world/anchors.js'
 
 const SEED = 1986
 
@@ -57,6 +62,31 @@ async function main() {
   const audio = new AudioEngine()
   canvas.addEventListener('click', () => audio.start(), { once: true })
 
+  // Life (M3)
+  const stimulus = new StimulusSystem()
+  const isWebGPU = backendName === 'WebGPU'
+  const fish = isWebGPU
+    ? new FishSchool(lowQuality ? 2000 : 5000, SEED)
+    : new AmbientFish(lowQuality ? 300 : 800)
+  scene.add(fish.mesh)
+  const vegetation = new VegetationField(SEED, density, anchorsForSeed(SEED, density), uTime)
+  scene.add(vegetation.group)
+
+  // Head-mounted flashlight: F toggles; while on it feeds stimulus slot 0
+  // (a forward attractor for small fish; later the thing that gets you found).
+  const flashlight = new THREE.SpotLight(0xfff2d8, 0, 60, Math.PI / 7, 0.45, 1.2)
+  flashlight.visible = false
+  scene.add(flashlight)
+  scene.add(flashlight.target)
+  document.addEventListener('keydown', (e) => {
+    if (e.code === 'KeyF') {
+      flashlight.visible = !flashlight.visible
+      flashlight.intensity = flashlight.visible ? 900 : 0
+      if (!flashlight.visible) stimulus.clearContinuous(0)
+    }
+  })
+  const fwd = new THREE.Vector3()
+
   // Dev hooks for verification tooling.
   window.__fathom = { stats: {}, seed: SEED, controller, chunkManager, audio }
 
@@ -91,6 +121,23 @@ async function main() {
     snow.update(renderer, dt, elapsed, pos)
     surface.update(pos, falloff)
     audio.setDepth(depth)
+
+    // Life (M3)
+    if (flashlight.visible) {
+      camera.getWorldDirection(fwd)
+      flashlight.position.set(pos.x, pos.y, pos.z)
+      flashlight.target.position.set(pos.x + fwd.x * 30, pos.y + fwd.y * 30, pos.z + fwd.z * 30)
+      stimulus.setContinuous(
+        0,
+        { x: pos.x + fwd.x * 8, y: pos.y + fwd.y * 8, z: pos.z + fwd.z * 8 },
+        0.45,
+        14,
+      )
+    }
+    stimulus.update(dt)
+    if (isWebGPU) fish.update(renderer, dt, pos, stimulus)
+    else fish.update(dt, elapsed, pos)
+    vegetation.update(pos)
 
     // Clip everything past the fog wall plus a margin: those chunks are
     // >98% fogged anyway, so the far plane tracks visibility.
