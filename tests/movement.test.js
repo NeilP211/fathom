@@ -23,6 +23,13 @@ describe('stepMovement', () => {
     expect(state.vel.y).toBeGreaterThan(-1)
   })
 
+  it('caps vertical speed below horizontal max', () => {
+    const state = { pos: { x: 0, y: -50, z: 0 }, vel: { x: 0, y: 0, z: 0 }, yaw: 0, pitch: 0 }
+    for (let i = 0; i < 600; i++) stepMovement(state, { forward: 0, strafe: 0, up: 1 }, 1 / 60, openWater)
+    expect(state.vel.y).toBeGreaterThan(2.0)
+    expect(state.vel.y).toBeLessThanOrEqual(2.45) // MAX_VERTICAL_SPEED 2.4 + tolerance
+  })
+
   it('collision keeps the diver out of the floor', () => {
     const state = { pos: { x: 0, y: -4.5, z: 0 }, vel: { x: 0, y: -5, z: 0 }, yaw: 0, pitch: 0 }
     for (let i = 0; i < 300; i++) stepMovement(state, { forward: 0, strafe: 0, up: -1 }, 1 / 60, flatFloor)

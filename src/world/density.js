@@ -4,6 +4,13 @@ import alea from 'alea'
 // density > 0 is solid rock, <= 0 is water; approximate meters near the surface.
 // IMPORTANT (spec section 13): each createNoiseXD call gets its own fresh alea
 // instance, or the world silently changes.
+//
+// The returned function also exposes two helpers used by chunk generation to
+// avoid recomputing the (x, z)-only floor noise for every y in a column:
+//   density.floorY(x, z)                 -> the seafloor height for a column
+//   density.atWithFloor(floorY, x, y, z) -> density given a precomputed floorY
+// density(x, y, z) === density.atWithFloor(density.floorY(x, z), x, y, z)
+// bit-for-bit, so CPU generation stays the single deterministic source of truth.
 export function createDensityField(seed) {
   const floorNoise = createNoise2D(alea(`${seed}:floor`))
   const reliefNoise = createNoise3D(alea(`${seed}:relief`))
@@ -20,12 +27,20 @@ export function createDensityField(seed) {
     return v / norm // in [-1, 1]
   }
 
-  return function density(x, y, z) {
-    const floorY = -45 + 18 * fbm2(x * 0.008, z * 0.008)
-    let d = floorY - y // positive below the seafloor surface
+  function floorY(x, z) {
+    return -45 + 18 * fbm2(x * 0.008, z * 0.008)
+  }
+
+  function atWithFloor(fY, x, y, z) {
+    let d = fY - y // positive below the seafloor surface
     d += 6 * reliefNoise(x * 0.03, y * 0.03, z * 0.03) // rocky relief and overhangs
     const carve = carveNoise(x * 0.02, y * 0.02, z * 0.02)
     if (carve > 0.45) d -= (carve - 0.45) * 40 // cave tunnels through the rock
     return d
   }
+
+  const density = (x, y, z) => atWithFloor(floorY(x, z), x, y, z)
+  density.floorY = floorY
+  density.atWithFloor = atWithFloor
+  return density
 }

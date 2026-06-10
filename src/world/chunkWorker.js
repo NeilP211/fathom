@@ -6,7 +6,7 @@ self.onmessage = (e) => {
   // Transfer the buffers (spec section 13: forgetting the transfer list
   // silently doubles memory and causes hitches).
   self.postMessage(
-    { jobId, cx: r.cx, cy: r.cy, cz: r.cz, positions: r.positions, normals: r.normals },
-    [r.positions.buffer, r.normals.buffer],
+    { jobId, cx: r.cx, cy: r.cy, cz: r.cz, positions: r.positions, normals: r.normals, indices: r.indices },
+    [r.positions.buffer, r.normals.buffer, r.indices.buffer],
   )
 }

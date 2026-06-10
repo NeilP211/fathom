@@ -22,8 +22,11 @@ export function visibilityAtDepth(depth) {
 }
 
 // Visibility is where FogExp2 transmittance reaches 2% (spec section 4).
+// three.js FogExp2 is exponential SQUARED: factor = 1 - exp(-(density * z)^2),
+// so the density that yields 2% transmittance at distance v is
+// sqrt(-ln(0.02)) / v, NOT -ln(0.02) / v (the plain-exponential form).
 export function fogDensityFor(visibility) {
-  return -Math.log(0.02) / visibility
+  return Math.sqrt(-Math.log(0.02)) / visibility
 }
 
 // Spec invariant: always at least one loaded chunk ring beyond the fog wall.

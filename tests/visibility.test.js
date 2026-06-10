@@ -15,10 +15,11 @@ describe('visibility curve', () => {
   })
 
   it('fog density gives 2% transmittance at the visibility distance', () => {
-    // FogExp2 factor is exp(-density * distance); at d = visibility it must be 0.02
+    // three.js FogExp2 transmittance is exp(-(density * distance)^2);
+    // at distance = visibility it must be 0.02
     const v = 96
     const density = fogDensityFor(v)
-    expect(Math.exp(-density * v)).toBeCloseTo(0.02, 5)
+    expect(Math.exp(-((density * v) ** 2))).toBeCloseTo(0.02, 5)
   })
 
   it('load radius is ceil(visibility / 32) + 1 (spec invariant)', () => {

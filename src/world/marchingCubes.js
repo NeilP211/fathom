@@ -5,33 +5,68 @@ export const GRID = CHUNK + 3 // 35 samples per axis: grid index i = local coord
 
 export const gridIndex = (x, y, z) => (z * GRID + y) * GRID + x
 
-// Standard marching cubes corner offsets and the corner pairs joined by each edge.
-const CORNERS = [
-  [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
-  [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
-]
-const EDGES = [
-  [0, 1], [1, 2], [2, 3], [3, 0],
-  [4, 5], [5, 6], [6, 7], [7, 4],
-  [0, 4], [1, 5], [2, 6], [3, 7],
-]
+// Standard marching cubes corner offsets (flat arrays: no destructuring in the
+// hot loop) and, for each of the 12 edges, the canonical base corner (the
+// lower end) plus the axis the edge runs along. The canonical form lets
+// adjacent cells share one welded vertex per grid edge.
+const CORNER_X = [0, 1, 1, 0, 0, 1, 1, 0]
+const CORNER_Y = [0, 0, 1, 1, 0, 0, 1, 1]
+const CORNER_Z = [0, 0, 0, 0, 1, 1, 1, 1]
+const EDGE_BX = [0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0]
+const EDGE_BY = [0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1]
+const EDGE_BZ = [0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0]
+const EDGE_AXIS = [0, 1, 0, 1, 0, 1, 0, 1, 2, 2, 2, 2]
 
-// grid: Float32Array(GRID^3) densities (>0 solid). Returns non-indexed
-// { positions, normals } in LOCAL chunk coordinates (0..32 on each axis).
+// grid: Float32Array(GRID^3) densities (>0 solid). Returns indexed geometry
+// { positions, normals, indices } in LOCAL chunk coordinates (0..32 per axis).
+// Vertices are welded: each grid edge crossing is computed exactly once and
+// shared by every triangle that uses it (spec section 4: indexed output).
 export function meshChunk(grid) {
   const positions = []
   const normals = []
-  const vert = new Array(12)
-  const norm = new Array(12)
-  const d = new Array(8)
-  const g0 = [0, 0, 0]
-  const g1 = [0, 0, 0]
+  const indices = []
+  const edgeMap = new Map() // canonical edge key -> vertex index
+  const eVert = new Int32Array(12) // per-cell scratch: edge -> vertex index
+  const d = new Float64Array(8)
+  let vcount = 0
 
-  // Density gradient at a grid point (points INTO the rock).
-  function gradient(gx, gy, gz, out) {
-    out[0] = grid[gridIndex(gx + 1, gy, gz)] - grid[gridIndex(gx - 1, gy, gz)]
-    out[1] = grid[gridIndex(gx, gy + 1, gz)] - grid[gridIndex(gx, gy - 1, gz)]
-    out[2] = grid[gridIndex(gx, gy, gz + 1)] - grid[gridIndex(gx, gy, gz - 1)]
+  // Compute (or reuse) the welded vertex on the grid edge starting at base
+  // grid coords (gbx, gby, gbz) along axis. Returns the vertex index.
+  function edgeVertex(gbx, gby, gbz, axis) {
+    const baseIdx = gridIndex(gbx, gby, gbz)
+    const key = baseIdx * 3 + axis
+    const cached = edgeMap.get(key)
+    if (cached !== undefined) return cached
+
+    const sx = axis === 0 ? 1 : 0
+    const sy = axis === 1 ? 1 : 0
+    const sz = axis === 2 ? 1 : 0
+    const d0 = grid[baseIdx]
+    const d1 = grid[gridIndex(gbx + sx, gby + sy, gbz + sz)]
+    const t = d0 / (d0 - d1) // zero crossing along the edge
+
+    positions.push(gbx - 1 + t * sx, gby - 1 + t * sy, gbz - 1 + t * sz)
+
+    // Central-difference gradients at both edge ends (valid everywhere thanks
+    // to the one-voxel apron), interpolated and negated: out of the rock.
+    const g0x = grid[gridIndex(gbx + 1, gby, gbz)] - grid[gridIndex(gbx - 1, gby, gbz)]
+    const g0y = grid[gridIndex(gbx, gby + 1, gbz)] - grid[gridIndex(gbx, gby - 1, gbz)]
+    const g0z = grid[gridIndex(gbx, gby, gbz + 1)] - grid[gridIndex(gbx, gby, gbz - 1)]
+    const ex = gbx + sx
+    const ey = gby + sy
+    const ez = gbz + sz
+    const g1x = grid[gridIndex(ex + 1, ey, ez)] - grid[gridIndex(ex - 1, ey, ez)]
+    const g1y = grid[gridIndex(ex, ey + 1, ez)] - grid[gridIndex(ex, ey - 1, ez)]
+    const g1z = grid[gridIndex(ex, ey, ez + 1)] - grid[gridIndex(ex, ey, ez - 1)]
+    const nx = -(g0x + t * (g1x - g0x))
+    const ny = -(g0y + t * (g1y - g0y))
+    const nz = -(g0z + t * (g1z - g0z))
+    const len = Math.hypot(nx, ny, nz) || 1
+    normals.push(nx / len, ny / len, nz / len)
+
+    const vi = vcount++
+    edgeMap.set(key, vi)
+    return vi
   }
 
   for (let cz = 0; cz < CHUNK; cz++)
@@ -39,37 +74,26 @@ export function meshChunk(grid) {
       for (let cx = 0; cx < CHUNK; cx++) {
         let cubeIndex = 0
         for (let i = 0; i < 8; i++) {
-          const [ox, oy, oz] = CORNERS[i]
-          d[i] = grid[gridIndex(cx + ox + 1, cy + oy + 1, cz + oz + 1)]
-          if (d[i] < 0) cubeIndex |= 1 << i // bit set in WATER (Bourke convention: below isolevel)
+          const di = grid[gridIndex(cx + CORNER_X[i] + 1, cy + CORNER_Y[i] + 1, cz + CORNER_Z[i] + 1)]
+          d[i] = di
+          if (di < 0) cubeIndex |= 1 << i // bit set in WATER (Bourke convention: below isolevel)
         }
         const edges = edgeTable[cubeIndex]
         if (edges === 0) continue
 
         for (let e = 0; e < 12; e++) {
           if (!(edges & (1 << e))) continue
-          const [a, b] = EDGES[e]
-          const t = d[a] / (d[a] - d[b]) // zero crossing along the edge
-          const [ax, ay, az] = CORNERS[a]
-          const [bx, by, bz] = CORNERS[b]
-          vert[e] = [cx + ax + t * (bx - ax), cy + ay + t * (by - ay), cz + az + t * (bz - az)]
-          gradient(cx + ax + 1, cy + ay + 1, cz + az + 1, g0)
-          gradient(cx + bx + 1, cy + by + 1, cz + bz + 1, g1)
-          // Negated interpolated gradient: out of the rock, into the water.
-          const nx = -(g0[0] + t * (g1[0] - g0[0]))
-          const ny = -(g0[1] + t * (g1[1] - g0[1]))
-          const nz = -(g0[2] + t * (g1[2] - g0[2]))
-          const len = Math.hypot(nx, ny, nz) || 1
-          norm[e] = [nx / len, ny / len, nz / len]
+          eVert[e] = edgeVertex(cx + EDGE_BX[e] + 1, cy + EDGE_BY[e] + 1, cz + EDGE_BZ[e] + 1, EDGE_AXIS[e])
         }
 
         for (let i = cubeIndex * 16; triTable[i] !== -1; i += 3) {
-          for (const e of [triTable[i], triTable[i + 1], triTable[i + 2]]) {
-            positions.push(vert[e][0], vert[e][1], vert[e][2])
-            normals.push(norm[e][0], norm[e][1], norm[e][2])
-          }
+          indices.push(eVert[triTable[i]], eVert[triTable[i + 1]], eVert[triTable[i + 2]])
         }
       }
 
-  return { positions: new Float32Array(positions), normals: new Float32Array(normals) }
+  return {
+    positions: new Float32Array(positions),
+    normals: new Float32Array(normals),
+    indices: new Uint32Array(indices),
+  }
 }

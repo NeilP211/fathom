@@ -33,4 +33,20 @@ describe('WorkerPool', () => {
     expect(pool.pending).toBe(0)
     pool.dispose()
   })
+
+  it('rejects in-flight jobs when a worker errors instead of stranding them', async () => {
+    const workers = []
+    const makeBrokenWorker = () => {
+      const w = { postMessage() {}, onmessage: null, onerror: null, onmessageerror: null, terminate() {} }
+      workers.push(w)
+      return w
+    }
+    const pool = new WorkerPool(1, makeBrokenWorker)
+    const p = pool.run({ value: 1 })
+    expect(pool.pending).toBe(1)
+    workers[0].onerror(new Error('boom'))
+    await expect(p).rejects.toThrow(/worker 0 failed/)
+    expect(pool.pending).toBe(0)
+    pool.dispose()
+  })
 })

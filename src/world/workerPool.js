@@ -1,16 +1,26 @@
 export class WorkerPool {
   constructor(size, makeWorker) {
     this.workers = []
-    this.jobs = new Map() // jobId -> resolve
+    this.jobs = new Map() // jobId -> { resolve, reject, workerIndex }
     this.nextJobId = 1
     this.nextWorker = 0
     for (let i = 0; i < size; i++) {
       const w = makeWorker()
       w.onmessage = (e) => {
-        const resolve = this.jobs.get(e.data.jobId)
-        if (resolve) {
+        const job = this.jobs.get(e.data.jobId)
+        if (job) {
           this.jobs.delete(e.data.jobId)
-          resolve(e.data)
+          job.resolve(e.data)
+        }
+      }
+      // A worker that throws or fails to load would otherwise strand its jobs
+      // forever (review finding): reject everything assigned to it so callers
+      // can retry on a later frame.
+      w.onerror = w.onmessageerror = (err) => {
+        for (const [jobId, job] of this.jobs) {
+          if (job.workerIndex !== i) continue
+          this.jobs.delete(jobId)
+          job.reject(new Error(`worker ${i} failed: ${err?.message || 'unknown error'}`))
         }
       }
       this.workers.push(w)
@@ -23,11 +33,11 @@ export class WorkerPool {
 
   run(msg, transfer = []) {
     const jobId = this.nextJobId++
-    return new Promise((resolve) => {
-      this.jobs.set(jobId, resolve)
-      const w = this.workers[this.nextWorker]
-      this.nextWorker = (this.nextWorker + 1) % this.workers.length
-      w.postMessage({ ...msg, jobId }, transfer)
+    const workerIndex = this.nextWorker
+    this.nextWorker = (this.nextWorker + 1) % this.workers.length
+    return new Promise((resolve, reject) => {
+      this.jobs.set(jobId, { resolve, reject, workerIndex })
+      this.workers[workerIndex].postMessage({ ...msg, jobId }, transfer)
     })
   }
 

@@ -120,7 +120,8 @@ These were explicit user choices during brainstorming. Do not relitigate them.
 ### Fog and visibility (the load-bearing trick)
 
 - Visibility is defined as the distance at which FogExp2 transmittance drops
-  below 2% (fog density = -ln(0.02) / visibility).
+  below 2%. three.js FogExp2 is exponential SQUARED (factor =
+  1 - exp(-(density * z)^2)), so fog density = sqrt(-ln(0.02)) / visibility.
 - Visibility is a per-depth-band curve, not a constant: 96m maximum at the
   Shelf, shrinking with depth toward near-zero at the Floor. Murk is
   simultaneously the horror, the performance budget, and the infinite illusion.

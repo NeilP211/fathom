@@ -1,4 +1,5 @@
 export const MAX_SPEED = 3 // m/s, diver (spec section 4)
+export const MAX_VERTICAL_SPEED = 2.4 // m/s, slightly below horizontal (spec section 4)
 export const ACCEL = 12 // m/s^2
 export const DRAG = 2.2 // 1/s, exponential
 export const SINK_SPEED = 0.25 // m/s, mild negative buoyancy when idle
@@ -71,6 +72,10 @@ export function stepMovement(state, input, dt, density) {
     state.vel.y *= s
     state.vel.z *= s
   }
+  // Vertical cap: ascending/descending is slightly slower than swimming
+  // horizontally (spec section 4 movement model).
+  if (state.vel.y > MAX_VERTICAL_SPEED) state.vel.y = MAX_VERTICAL_SPEED
+  else if (state.vel.y < -MAX_VERTICAL_SPEED) state.vel.y = -MAX_VERTICAL_SPEED
 
   state.pos.x += state.vel.x * dt
   state.pos.y += state.vel.y * dt

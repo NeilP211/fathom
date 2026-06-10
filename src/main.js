@@ -60,6 +60,14 @@ async function main() {
     scene.fog.density = fogDensityFor(visibility)
     chunkManager.update(controller.state.pos, loadRadiusFor(visibility))
 
+    // Clip everything past the fog wall plus a margin: those chunks are
+    // >98% fogged anyway, so the far plane tracks visibility.
+    const far = visibility + 48
+    if (Math.abs(camera.far - far) > 0.5) {
+      camera.far = far
+      camera.updateProjectionMatrix()
+    }
+
     hint.style.display = controller.locked ? 'none' : 'flex'
     const info = {
       backendName,

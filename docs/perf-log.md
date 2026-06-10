@@ -20,3 +20,20 @@ Notes:
   255 resident chunks (budget band 150-300) with no fps drop.
 - Gate (spec section 4): PASS on the M-series Mac. Intel Iris Xe numbers
   remain projections until a Windows laptop is borrowed (pre-launch task).
+
+## 2026-06-09 Post-review fixes (same machine)
+
+Adversarial review (19 agents) confirmed and fixed: FogExp2 exponential-squared
+density formula (fog wall was at 0.506x the designed distance), stale-result
+mesh leak in chunk streaming (generation token), per-column floor noise
+precompute, indexed welded mesher output, worker error rejection path,
+vertical speed cap, HUD write throttle, preset chunk bounding spheres,
+visibility-tracking far plane.
+
+| Metric | Before | After |
+|---|---|---|
+| Surface chunk generation (avg) | ~11.3ms (over 10ms budget) | 5.40ms |
+| Surface chunk generation (max of 40) | ~12.6ms | 6.57ms |
+| Empty chunk generation | ~6.9ms | 3.46ms |
+| Vertices per ~4k-tri chunk | ~12,200 (soup) | ~2,100 (welded + indexed) |
+| FATHOM fps (WebGPU / WebGL2) | 60 / 60 | 60 / 60 |
