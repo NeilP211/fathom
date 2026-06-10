@@ -2,28 +2,37 @@
   "hash": "4c1a27bb",
   "configHash": "8ca3a212",
   "lockfileHash": "d15afc08",
-  "browserHash": "ffffa4c8",
+  "browserHash": "4b3547e8",
   "optimized": {
     "three/webgpu": {
       "src": "../../node_modules/three/build/three.webgpu.js",
       "file": "three_webgpu.js",
-      "fileHash": "79607a41",
+      "fileHash": "4c37c40d",
       "needsInterop": false
     },
     "simplex-noise": {
       "src": "../../node_modules/simplex-noise/dist/esm/simplex-noise.js",
       "file": "simplex-noise.js",
-      "fileHash": "469a0816",
+      "fileHash": "c065c69d",
       "needsInterop": false
     },
     "alea": {
       "src": "../../node_modules/alea/alea.js",
       "file": "alea.js",
-      "fileHash": "0c23dec1",
+      "fileHash": "d960f414",
       "needsInterop": true
+    },
+    "three/tsl": {
+      "src": "../../node_modules/three/build/three.tsl.js",
+      "file": "three_tsl.js",
+      "fileHash": "1d2fa60d",
+      "needsInterop": false
     }
   },
   "chunks": {
+    "chunk-VDTBUPNA": {
+      "file": "chunk-VDTBUPNA.js"
+    },
     "chunk-BUSYA2B4": {
       "file": "chunk-BUSYA2B4.js"
     }

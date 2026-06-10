@@ -32,7 +32,7 @@ const CHUNK_BOUND_CENTER = new THREE.Vector3(CHUNK / 2, CHUNK / 2, CHUNK / 2)
 const CHUNK_BOUND_RADIUS = (CHUNK / 2) * Math.sqrt(3)
 
 export class ChunkManager {
-  constructor(scene, pool, seed) {
+  constructor(scene, pool, seed, material = null) {
     this.scene = scene
     this.pool = pool
     this.seed = seed
@@ -40,11 +40,13 @@ export class ChunkManager {
     this.uploadQueue = [] // worker results awaiting geometry upload
     this.gen = 0 // generation token: stale worker results are dropped
     this.lastScanKey = '' // skip the request/evict scan when nothing changed
-    this.material = new THREE.MeshStandardMaterial({
-      color: 0x55706a,
-      roughness: 0.95,
-      metalness: 0.0,
-    })
+    this.material =
+      material ||
+      new THREE.MeshStandardMaterial({
+        color: 0x55706a,
+        roughness: 0.95,
+        metalness: 0.0,
+      })
   }
 
   get residentCount() {
