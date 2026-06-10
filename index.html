@@ -7,21 +7,98 @@
   <style>
     html, body { margin: 0; height: 100%; overflow: hidden; background: #03141f; }
     #app { width: 100%; height: 100%; display: block; }
+    .mono { font: 12px/1.5 ui-monospace, Menlo, monospace; }
     #hud {
       position: fixed; top: 10px; left: 10px; color: #9fd8c9;
-      font: 12px/1.5 ui-monospace, monospace; white-space: pre;
+      font: 11px/1.45 ui-monospace, monospace; white-space: pre;
       text-shadow: 0 1px 2px #000; pointer-events: none; user-select: none;
+      opacity: 0.55;
     }
     #hint {
       position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
       color: #cfeee4; font: 16px ui-monospace, monospace; text-shadow: 0 1px 3px #000;
       pointer-events: none; user-select: none;
     }
+
+    /* game HUD */
+    #gamehud { position: fixed; inset: 0; pointer-events: none; user-select: none;
+      font: 13px ui-monospace, Menlo, monospace; color: #cfeee4; }
+    #compass { position: absolute; top: 14px; left: 50%; transform: translateX(-50%);
+      width: 380px; height: 26px; background: rgba(4, 18, 26, 0.55);
+      border: 1px solid rgba(160, 220, 205, 0.25); border-radius: 3px; overflow: hidden; }
+    #compass-inner { position: relative; width: 100%; height: 100%; }
+    #compass-inner i { position: absolute; top: 3px; transform: translateX(-50%);
+      font-style: normal; color: #9fd8c9; }
+    #compass-inner b { position: absolute; top: 1px; transform: translateX(-50%);
+      color: #ffd27a; text-align: center; line-height: 1.05; }
+    #compass-inner b u { display: block; font-size: 9px; text-decoration: none; }
+    #bars { position: absolute; left: 50%; transform: translateX(-50%); bottom: 26px;
+      width: 320px; display: flex; flex-direction: column; gap: 6px; }
+    .bar { position: relative; height: 16px; background: rgba(4, 18, 26, 0.6);
+      border: 1px solid rgba(160, 220, 205, 0.3); border-radius: 3px; overflow: hidden; }
+    .bar.hp { height: 8px; }
+    .bar .fill { height: 100%; background: #37c8ab; width: 100%;
+      transition: width 0.15s linear, background 0.3s; }
+    .bar.hp .fill { background: #c8a437; }
+    .bar span { position: absolute; left: 6px; top: 0; font-size: 10px; line-height: 16px;
+      color: rgba(220, 245, 240, 0.85); text-shadow: 0 1px 2px #000; }
+    .bar.hp span { display: none; }
+    #depth-readout { position: absolute; bottom: 30px; left: calc(50% + 180px);
+      font-size: 18px; color: #cfeee4; text-shadow: 0 1px 3px #000; }
+    #prompt { position: absolute; bottom: 96px; left: 50%; transform: translateX(-50%);
+      background: rgba(4, 18, 26, 0.7); border: 1px solid rgba(160, 220, 205, 0.3);
+      padding: 5px 12px; border-radius: 3px; display: none; }
+    #scanring { position: absolute; bottom: 78px; left: 50%; transform: translateX(-50%);
+      width: 160px; height: 6px; background: rgba(4, 18, 26, 0.7);
+      border: 1px solid rgba(160, 220, 205, 0.3); border-radius: 3px; display: none; }
+    #scanfill { height: 100%; width: 0%; background: #4aa3ff; }
+    #toasts { position: absolute; right: 16px; top: 60px; display: flex;
+      flex-direction: column; gap: 6px; align-items: flex-end; }
+    .toast { background: rgba(4, 18, 26, 0.75); border: 1px solid rgba(160, 220, 205, 0.35);
+      padding: 6px 10px; border-radius: 3px; max-width: 320px;
+      animation: toastin 0.25s ease-out; }
+    .toast.out { opacity: 0; transition: opacity 0.6s; }
+    @keyframes toastin { from { transform: translateX(20px); opacity: 0; } }
+    #vignette { position: absolute; inset: 0; opacity: 0; transition: opacity 0.4s;
+      background: radial-gradient(ellipse at center, transparent 30%, rgba(0,0,0,0.96) 78%); }
+    #deathscreen { position: absolute; inset: 0; display: none; flex-direction: column;
+      align-items: center; justify-content: center; gap: 10px;
+      background: rgba(0, 0, 0, 0.92); color: #e04f3a; font-size: 30px;
+      letter-spacing: 6px; }
+    #deathscreen small { color: #9fd8c9; font-size: 12px; letter-spacing: 3px; }
+
+    /* PDA */
+    #pda { position: fixed; inset: 0; display: none; align-items: center;
+      justify-content: center; background: rgba(2, 10, 16, 0.55);
+      font: 13px ui-monospace, Menlo, monospace; color: #cfeee4; }
+    #pda-panel { width: 560px; max-height: 70vh; background: rgba(4, 18, 26, 0.92);
+      border: 1px solid rgba(160, 220, 205, 0.35); border-radius: 4px;
+      display: flex; flex-direction: column; }
+    #pda-tabs { display: flex; gap: 4px; padding: 10px 12px 0; }
+    #pda-tabs span { padding: 5px 14px; cursor: pointer; border: 1px solid rgba(160,220,205,0.25);
+      border-bottom: none; border-radius: 3px 3px 0 0; color: #7fb5a8; }
+    #pda-tabs span.on { background: rgba(55, 200, 171, 0.12); color: #cfeee4; }
+    #pda-body { padding: 12px; overflow-y: auto; border-top: 1px solid rgba(160,220,205,0.25); }
+    #pda-body .row { display: flex; justify-content: space-between; align-items: center;
+      padding: 7px 6px; border-bottom: 1px solid rgba(160, 220, 205, 0.12); gap: 12px; }
+    #pda-body .row small { display: block; color: #7fb5a8; font-size: 11px; }
+    #pda-body .row.locked, #pda-body .row.done { color: #6c8a83; }
+    #pda-body .row button { pointer-events: auto; background: rgba(55, 200, 171, 0.15);
+      color: #cfeee4; border: 1px solid rgba(160, 220, 205, 0.4); border-radius: 3px;
+      padding: 4px 12px; cursor: pointer; font: inherit; }
+    #pda-body .row button:disabled { opacity: 0.35; cursor: default; }
+    #pda-body .empty { color: #6c8a83; padding: 8px 6px; }
+    #pda-body .section { margin: 10px 0 4px; color: #7fb5a8; letter-spacing: 2px; font-size: 11px; }
+    #pda-body .log { padding: 8px 6px; border-bottom: 1px solid rgba(160,220,205,0.12); }
+    #pda-body .log p { margin: 6px 0 0; color: #a8cfc5; line-height: 1.5; }
+    #pda-hint { padding: 8px 12px; color: #6c8a83; font-size: 11px; }
   </style>
 </head>
 <body>
   <canvas id="app"></canvas>
   <div id="hud"></div>
+  <div id="gamehud"></div>
+  <div id="pda"></div>
   <div id="hint">click to dive</div>
   <script type="module" src="/src/main.js"></script>
 </body>
