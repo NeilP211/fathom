@@ -4,9 +4,10 @@ const MOUSE_SENSITIVITY = 0.0022
 const PITCH_LIMIT = 1.55 // radians, just short of straight up/down
 
 export class DiveController {
-  constructor(camera, canvas, density, spawn = { x: 0, y: -8, z: 0 }) {
+  constructor(camera, canvas, density, spawn = { x: 0, y: -8, z: 0 }, settings = null) {
     this.camera = camera
     this.density = density
+    this.settings = settings
     this.state = {
       pos: { ...spawn },
       vel: { x: 0, y: 0, z: 0 },
@@ -20,8 +21,9 @@ export class DiveController {
     canvas.addEventListener('click', () => canvas.requestPointerLock())
     document.addEventListener('mousemove', (e) => {
       if (document.pointerLockElement !== canvas) return
+      const ySign = this.settings?.invertY ? -1 : 1
       this.state.yaw -= e.movementX * MOUSE_SENSITIVITY
-      this.state.pitch -= e.movementY * MOUSE_SENSITIVITY
+      this.state.pitch -= e.movementY * MOUSE_SENSITIVITY * ySign
       this.state.pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, this.state.pitch))
     })
     document.addEventListener('keydown', (e) => this.keys.add(e.code))
