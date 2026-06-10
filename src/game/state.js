@@ -57,6 +57,17 @@ export const RECIPES = [
     cradleOnly: true,
     desc: 'A one-person sub. Hull rated to 300m. Assemble at the salvage cradle.',
   },
+  {
+    id: 'flares',
+    name: 'Flares (x2)',
+    cost: { scrap: 1 },
+    known: true,
+    repeatable: true,
+    desc: 'Burning light that sinks slowly. Some things prefer it to you.',
+    effect: (s) => {
+      s.inventory.flare = (s.inventory.flare || 0) + 2
+    },
+  },
 ]
 
 // Signals: the entire quest system (spec section 5). M4 ships the first two;
@@ -167,7 +178,7 @@ export function addItem(state, item, n = 1) {
 export function canCraft(state, recipeId) {
   const r = RECIPES.find((x) => x.id === recipeId)
   if (!r) return false
-  if (state.crafted.includes(recipeId)) return false
+  if (!r.repeatable && state.crafted.includes(recipeId)) return false
   const known = r.known || (state.fragments[recipeId] || 0) >= (r.fragmentsNeeded || Infinity)
   if (!known) return false
   for (const [item, n] of Object.entries(r.cost)) {
@@ -180,7 +191,7 @@ export function craft(state, recipeId) {
   if (!canCraft(state, recipeId)) return false
   const r = RECIPES.find((x) => x.id === recipeId)
   for (const [item, n] of Object.entries(r.cost)) state.inventory[item] -= n
-  state.crafted.push(recipeId)
+  if (!r.repeatable) state.crafted.push(recipeId)
   if (r.effect) r.effect(state)
   state.flags.firstCraft = true
   return true
